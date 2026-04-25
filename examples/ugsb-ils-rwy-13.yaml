@@ -1,0 +1,252 @@
+# ILS RWY 13 into Batumi (UGSB), DCS Caucasus.
+# Fictional-realistic: coordinates approximate real UGSB; frequencies and
+# procedure design are invented but plausible. Validates against
+# ../schema/procedure.schema.json.
+
+airport_icao: UGSB
+procedure_id: ILS RWY 13
+procedure_type: iap
+approach_subtype: ils
+amendment: "1"
+airac_cycle: "2604"
+effective_date: "2026-04-16"
+expires_date: "2026-05-14"
+mag_variation_deg: 6.0
+mag_variation_year: 2026
+reference_datum: WGS84
+
+tdze_ft_msl: 32
+airport_elev_ft_msl: 32
+runway_ident: "13"
+
+basemap:
+  region: batumi
+
+fixes:
+  - id: BTM
+    type: navaid
+    name: BATUMI
+    navaid_type: vor_dme
+    lat: 41.6102
+    lon: 41.5997
+    frequency_mhz: 115.80
+    station_declination_deg: 6.0
+    usable_range_nm: 40
+
+  - id: IBTM
+    type: navaid
+    name: BATUMI LOC
+    navaid_type: loc
+    lat: 41.6499
+    lon: 41.6432
+    frequency_mhz: 110.30
+    bearing_true_deg: 121.0
+
+  - id: BLACK
+    type: named_fix
+    name: BLACK
+    lat: 41.9000
+    lon: 41.2000
+    elevation_ft: 0
+
+  - id: KOBUL
+    type: named_fix
+    name: KOBUL
+    lat: 41.7600
+    lon: 41.4500
+
+  - id: BT13F
+    type: named_fix
+    name: BT13F
+    lat: 41.6850
+    lon: 41.5650
+
+  - id: RW13
+    type: runway_threshold
+    name: RWY 13 THRESHOLD
+    lat: 41.6499
+    lon: 41.6432
+    elevation_ft: 32
+
+  - id: BTMAP
+    type: named_fix
+    name: BTMAP
+    lat: 41.6200
+    lon: 41.6750
+
+briefing_strip:
+  final_approach_course_deg: 127
+  gs_intercept_altitude_ft: 2500
+  gs_angle_deg: 3.0
+  transition_altitude_ft: 10000
+  inop_components_table_applies: true
+  notes:
+    - severity: warning
+      text: Procedure NA at night. High terrain NE of aerodrome.
+    - severity: info
+      text: DME required.
+
+communications:
+  frequencies:
+    - role: atis
+      frequency_mhz: 128.90
+    - role: app
+      frequency_mhz: 131.00
+      label: BATUMI APPROACH
+    - role: twr
+      frequency_mhz: 118.45
+    - role: gnd
+      frequency_mhz: 121.60
+    - role: emergency
+      frequency_mhz: 121.50
+
+msa:
+  center_navaid_id: BTM
+  radius_nm: 25
+  bearing_reference: magnetic_inbound
+  sectors:
+    - start_bearing_deg: 0
+      end_bearing_deg: 90
+      altitude_ft: 9800
+    - start_bearing_deg: 90
+      end_bearing_deg: 180
+      altitude_ft: 4500
+    - start_bearing_deg: 180
+      end_bearing_deg: 270
+      altitude_ft: 3200
+    - start_bearing_deg: 270
+      end_bearing_deg: 360
+      altitude_ft: 7200
+
+transitions:
+  - name: BLACK
+    type: approach_transition
+    legs:
+      - terminator: IF
+        transition_type: approach_transition
+        to_fix_id: BLACK
+        altitude_constraint:
+          altitude_description: at_or_above
+          altitude_1_ft: 5000
+      - terminator: TF
+        transition_type: approach_transition
+        from_fix_id: BLACK
+        to_fix_id: KOBUL
+        course_deg: 124
+        altitude_constraint:
+          altitude_description: at_or_above
+          altitude_1_ft: 4000
+
+common_legs:
+  - terminator: IF
+    transition_type: common
+    to_fix_id: KOBUL
+    altitude_constraint:
+      altitude_description: at
+      altitude_1_ft: 4000
+  - terminator: CF
+    transition_type: common
+    from_fix_id: KOBUL
+    to_fix_id: BT13F
+    course_deg: 127
+    altitude_constraint:
+      altitude_description: glide_slope_altitude
+      altitude_1_ft: 2500
+    speed_constraint:
+      speed_limit_kt: 185
+      speed_limit_description: at_or_below
+  - terminator: CF
+    transition_type: common
+    from_fix_id: BT13F
+    to_fix_id: RW13
+    course_deg: 127
+    vertical_angle_deg: 3.0
+    altitude_constraint:
+      altitude_description: at
+      altitude_1_ft: 32
+
+missed_approach:
+  text_description: Climb to 2000 then climbing right turn to 4000 direct BTM VOR and hold.
+  icon_sequence: [climb, turn_right, hold]
+  legs:
+    - terminator: CA
+      transition_type: missed_approach
+      from_fix_id: RW13
+      course_deg: 127
+      altitude_constraint:
+        altitude_description: at_or_above
+        altitude_1_ft: 2000
+    - terminator: DF
+      transition_type: missed_approach
+      to_fix_id: BTM
+      turn_direction: right
+      altitude_constraint:
+        altitude_description: at
+        altitude_1_ft: 4000
+    - terminator: HM
+      transition_type: missed_approach
+      to_fix_id: BTM
+      hold:
+        inbound_course_deg: 307
+        turn_direction: right
+        leg_time_sec: 60
+
+minima:
+  - variant: s_ils
+    category: A
+    da_ft_msl: 232
+    dh_ft_agl: 200
+    visibility_sm: 0.50
+    rvr_ft: 2400
+  - variant: s_ils
+    category: B
+    da_ft_msl: 232
+    dh_ft_agl: 200
+    visibility_sm: 0.50
+    rvr_ft: 2400
+  - variant: s_ils
+    category: C
+    da_ft_msl: 232
+    dh_ft_agl: 200
+    visibility_sm: 0.50
+    rvr_ft: 2400
+  - variant: s_ils
+    category: D
+    da_ft_msl: 232
+    dh_ft_agl: 200
+    visibility_sm: 0.75
+    rvr_ft: 4000
+  - variant: circling
+    category: A
+    mda_ft_msl: 640
+    mdh_ft_agl: 608
+    visibility_sm: 1.00
+    notes_ref: Circling NA east of RWY 13-31.
+  - variant: circling
+    category: B
+    mda_ft_msl: 640
+    mdh_ft_agl: 608
+    visibility_sm: 1.00
+  - variant: circling
+    category: C
+    mda_ft_msl: 780
+    mdh_ft_agl: 748
+    visibility_sm: 1.50
+  - variant: circling
+    category: D
+    mda_ft_msl: 780
+    mdh_ft_agl: 748
+    visibility_sm: 2.00
+
+runways:
+  - ident_low_end: "13"
+    ident_high_end: "31"
+    low_threshold_lat_lon: { lat: 41.6499, lon: 41.6432 }
+    high_threshold_lat_lon: { lat: 41.6102, lon: 41.5997 }
+    length_ft: 8858
+    width_ft: 148
+    surface: asphalt
+    tdze_low_ft: 32
+    tdze_high_ft: 32
+    magnetic_bearing_low_end_deg: 127
+    lighting: [HIRL, PAPI, MALSR]

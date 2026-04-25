@@ -1,0 +1,265 @@
+# ILS RWY 23 into Spangdahlem AB (ETAD), USAFE / Eifel region, Germany.
+# Fictional-realistic: coordinates approximate real ETAD; frequencies and
+# procedure design are invented but plausible. Validates against
+# ../schema/procedure.schema.json.
+
+airport_icao: ETAD
+procedure_id: ILS RWY 23
+procedure_type: iap
+approach_subtype: ils
+amendment: "1"
+airac_cycle: "2604"
+effective_date: "2026-04-16"
+expires_date: "2026-05-14"
+mag_variation_deg: 2.0
+mag_variation_year: 2026
+reference_datum: WGS84
+
+tdze_ft_msl: 1196
+airport_elev_ft_msl: 1196
+runway_ident: "23"
+
+basemap:
+  region: spangdahlem
+  show_rivers: true
+  show_roads: true
+  show_cities: true
+  show_city_labels: true
+
+fixes:
+  - id: SPA
+    type: navaid
+    name: SPANGDAHLEM
+    navaid_type: tacan
+    lat: 49.973
+    lon: 6.692
+    frequency_mhz: 113.70
+    station_declination_deg: 2.0
+    usable_range_nm: 40
+
+  - id: ISPA
+    type: navaid
+    name: SPANGDAHLEM LOC
+    navaid_type: loc
+    lat: 49.988
+    lon: 6.713
+    frequency_mhz: 109.30
+    bearing_true_deg: 227.0
+
+  - id: DKB
+    type: navaid
+    name: DIEKIRCH
+    navaid_type: vor_dme
+    lat: 49.870
+    lon: 6.160
+    frequency_mhz: 114.35
+    station_declination_deg: 2.0
+    usable_range_nm: 80
+
+  - id: SPANG
+    type: named_fix
+    name: SPANG
+    lat: 50.130
+    lon: 6.934
+    elevation_ft: 0
+
+  - id: EIFEL
+    type: named_fix
+    name: EIFEL
+    lat: 50.082
+    lon: 6.860
+
+  - id: ED23F
+    type: named_fix
+    name: ED23F
+    lat: 50.035
+    lon: 6.786
+
+  - id: RW23
+    type: runway_threshold
+    name: RWY 23 THRESHOLD
+    lat: 49.988
+    lon: 6.713
+    elevation_ft: 1196
+
+  - id: EDMAP
+    type: named_fix
+    name: EDMAP
+    lat: 49.958
+    lon: 6.671
+
+briefing_strip:
+  final_approach_course_deg: 225
+  gs_intercept_altitude_ft: 3000
+  gs_angle_deg: 3.0
+  transition_altitude_ft: 5000
+  inop_components_table_applies: true
+  notes:
+    - severity: info
+      text: DME required.
+    - severity: warning
+      text: "Noise abatement: avoid overflight of Bitburg / Trier below 4000 ft MSL."
+
+communications:
+  frequencies:
+    - role: atis
+      frequency_mhz: 124.85
+    - role: app
+      frequency_mhz: 124.85
+      label: BONN RADAR
+    - role: twr
+      frequency_mhz: 126.20
+    - role: gnd
+      frequency_mhz: 135.10
+    - role: emergency
+      frequency_mhz: 121.50
+
+msa:
+  center_navaid_id: SPA
+  radius_nm: 25
+  bearing_reference: magnetic_inbound
+  sectors:
+    - start_bearing_deg: 0
+      end_bearing_deg: 90
+      altitude_ft: 4500
+    - start_bearing_deg: 90
+      end_bearing_deg: 180
+      altitude_ft: 3800
+    - start_bearing_deg: 180
+      end_bearing_deg: 270
+      altitude_ft: 3500
+    - start_bearing_deg: 270
+      end_bearing_deg: 360
+      altitude_ft: 5500
+
+transitions:
+  - name: SPANG
+    type: approach_transition
+    legs:
+      - terminator: IF
+        transition_type: approach_transition
+        to_fix_id: SPANG
+        altitude_constraint:
+          altitude_description: at_or_above
+          altitude_1_ft: 5000
+      - terminator: TF
+        transition_type: approach_transition
+        from_fix_id: SPANG
+        to_fix_id: EIFEL
+        course_deg: 222
+        altitude_constraint:
+          altitude_description: at_or_above
+          altitude_1_ft: 4000
+
+common_legs:
+  - terminator: IF
+    transition_type: common
+    to_fix_id: EIFEL
+    altitude_constraint:
+      altitude_description: at
+      altitude_1_ft: 4000
+  - terminator: CF
+    transition_type: common
+    from_fix_id: EIFEL
+    to_fix_id: ED23F
+    course_deg: 225
+    altitude_constraint:
+      altitude_description: glide_slope_altitude
+      altitude_1_ft: 3000
+    speed_constraint:
+      speed_limit_kt: 185
+      speed_limit_description: at_or_below
+  - terminator: CF
+    transition_type: common
+    from_fix_id: ED23F
+    to_fix_id: RW23
+    course_deg: 225
+    vertical_angle_deg: 3.0
+    altitude_constraint:
+      altitude_description: at
+      altitude_1_ft: 1196
+
+missed_approach:
+  text_description: Climb to 3000 then direct SPA TACAN and hold inbound 050, right turns, 1 min legs.
+  icon_sequence: [climb, direct, hold]
+  legs:
+    - terminator: CA
+      transition_type: missed_approach
+      from_fix_id: RW23
+      course_deg: 225
+      altitude_constraint:
+        altitude_description: at_or_above
+        altitude_1_ft: 3000
+    - terminator: DF
+      transition_type: missed_approach
+      to_fix_id: SPA
+      turn_direction: right
+      altitude_constraint:
+        altitude_description: at
+        altitude_1_ft: 3000
+    - terminator: HM
+      transition_type: missed_approach
+      to_fix_id: SPA
+      hold:
+        inbound_course_deg: 50
+        turn_direction: right
+        leg_time_sec: 60
+
+minima:
+  - variant: s_ils
+    category: A
+    da_ft_msl: 1396
+    dh_ft_agl: 200
+    visibility_sm: 0.50
+    rvr_ft: 2400
+  - variant: s_ils
+    category: B
+    da_ft_msl: 1396
+    dh_ft_agl: 200
+    visibility_sm: 0.50
+    rvr_ft: 2400
+  - variant: s_ils
+    category: C
+    da_ft_msl: 1396
+    dh_ft_agl: 200
+    visibility_sm: 0.50
+    rvr_ft: 2400
+  - variant: s_ils
+    category: D
+    da_ft_msl: 1396
+    dh_ft_agl: 200
+    visibility_sm: 0.75
+    rvr_ft: 4000
+  - variant: circling
+    category: A
+    mda_ft_msl: 1700
+    mdh_ft_agl: 500
+    visibility_sm: 1.00
+  - variant: circling
+    category: B
+    mda_ft_msl: 1700
+    mdh_ft_agl: 500
+    visibility_sm: 1.00
+  - variant: circling
+    category: C
+    mda_ft_msl: 1900
+    mdh_ft_agl: 700
+    visibility_sm: 1.50
+  - variant: circling
+    category: D
+    mda_ft_msl: 1900
+    mdh_ft_agl: 700
+    visibility_sm: 2.00
+
+runways:
+  - ident_low_end: "05"
+    ident_high_end: "23"
+    low_threshold_lat_lon: { lat: 49.958, lon: 6.671 }
+    high_threshold_lat_lon: { lat: 49.988, lon: 6.713 }
+    length_ft: 10000
+    width_ft: 150
+    surface: asphalt
+    tdze_low_ft: 1196
+    tdze_high_ft: 1196
+    magnetic_bearing_low_end_deg: 45
+    lighting: [HIRL, PAPI, MALSR]

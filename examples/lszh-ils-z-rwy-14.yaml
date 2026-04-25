@@ -1,0 +1,450 @@
+# ILS Z RWY 14 into Zurich Kloten (LSZH), Switzerland.
+# Fictional-realistic: coordinates approximate real LSZH; frequencies and
+# procedure design are invented but plausible. Exercises the ARINC 424 AF
+# (Arc-to-Fix) leg terminator with a MULTI-IAF 12 DME arc transition
+# around the KLO VOR/DME -- AMIKI (NE), RILAX (W), and GIPOL (S) feeding
+# INTER on the extended RWY 14 final approach course at R-317 KLO. The
+# arc exercises the fly-by fillet geometry at three separate entries and
+# one shared exit. Alpine terrain to the south/east motivates a 12 000 ft
+# MSA sector and warrants the mountainous-region hillshade basemap.
+#
+# Validates against ../schema/procedure.schema.json.
+
+airport_icao: LSZH
+procedure_id: ILS Z RWY 14
+procedure_type: iap
+approach_subtype: ils
+amendment: "1"
+airac_cycle: "2604"
+effective_date: "2026-04-16"
+expires_date: "2026-05-14"
+mag_variation_deg: 3.0
+mag_variation_year: 2026
+reference_datum: WGS84
+
+tdze_ft_msl: 1416
+airport_elev_ft_msl: 1416
+runway_ident: "14"
+
+basemap:
+  region: zurich
+  show_rivers: true
+  show_roads: true
+  show_cities: true
+  show_city_labels: true
+
+fixes:
+  # Primary navaid -- KLO VOR/DME is the arc center and DME reference
+  # for the entire procedure. On-airport.
+  - id: KLO
+    type: navaid
+    name: KLOTEN
+    navaid_type: vor_dme
+    lat: 47.462
+    lon: 8.545
+    frequency_mhz: 114.85
+    station_declination_deg: 3.0
+    usable_range_nm: 60
+
+  # IAF -- NE entry on the 12 DME arc, R-045 KLO. Inbound traffic from
+  # Germany / central Europe intercepts the arc here.
+  - id: AMIKI
+    type: named_fix
+    name: AMIKI
+    lat: 47.6104
+    lon: 8.7434
+
+  # IAF -- western entry on the 12 DME arc, R-275 KLO. Inbound traffic
+  # from France / southern Germany intercepts here.
+  - id: RILAX
+    type: named_fix
+    name: RILAX
+    lat: 47.4686
+    lon: 8.2495
+
+  # IAF -- southern entry on the 12 DME arc, R-200 KLO. Inbound traffic
+  # crossing the Alps from Italy / Ticino intercepts here.
+  - id: GIPOL
+    type: named_fix
+    name: GIPOL
+    lat: 47.2708
+    lon: 8.4589
+
+  # Arc exit / intermediate fix -- 12 DME on the backward extension of
+  # the RWY 14 final approach course. All three arc transitions
+  # terminate here, then fly the straight-in intermediate and final.
+  # Geometrically 12.00 NM from KLO; placed so the initial great-circle
+  # bearing INTER -> FL14F -> RW14 all agree to within 0.2 deg of 137.
+  - id: INTER
+    type: named_fix
+    name: INTER
+    lat: 47.6156
+    lon: 8.3556
+
+  # FAF -- 5 NM back from the RWY 14 threshold on the FAC. Glidepath
+  # intercept altitude 4000 ft MSL.
+  - id: FL14F
+    type: named_fix
+    name: FL14F
+    lat: 47.5499
+    lon: 8.4469
+
+  # Landing threshold -- RWY 14 low end.
+  - id: RW14
+    type: runway_threshold
+    name: RWY 14 THRESHOLD
+    lat: 47.489
+    lon: 8.531
+    elevation_ft: 1416
+
+  # Missed-approach navaid -- ZUE (Zuerich East) VOR/DME. Drives the
+  # R-231 ZUE intercept after passing IKL, and the R-094 ZUE outbound
+  # to AMIKI.
+  - id: ZUE
+    type: navaid
+    name: ZURICH EAST
+    navaid_type: vor_dme
+    lat: 47.592
+    lon: 8.818
+    frequency_mhz: 110.05
+    station_declination_deg: 3.0
+    usable_range_nm: 60
+
+  # Missed-approach waypoint -- D5.1 IKL past the station. For this
+  # chart IKL (the Kloten localizer) is colocated with the KLO VOR/DME;
+  # D5.1 IKL is 5.1 NM from KLO along the extended RW14 final approach
+  # course (137 M = 140 T). Turn point for the initial LEFT turn onto
+  # course 359 M (MAX 210 KT, MIN BANK 20 deg).
+  - id: IKL51
+    type: named_fix
+    name: IKL51
+    lat: 47.3969
+    lon: 8.6257
+
+  # Missed-approach waypoint -- intercept of course 359 M from IKL51
+  # with R-231 ZUE. Computed as spherical intersection of (IKL51, 002
+  # true) with (ZUE, 234 true). Sits ~6.2 NM from IKL51 and ~9.4 NM SW
+  # of ZUE on the R-231 line.
+  - id: Z231I
+    type: named_fix
+    name: Z231I
+    lat: 47.5001
+    lon: 8.6310
+
+  # Missed-approach waypoint -- D7.8 ZUE on the R-231 inbound radial.
+  # 7.8 NM from ZUE on bearing 234 T. Crossing restriction MIN 6000 ft
+  # applies here on the inbound to ZUE VOR (climb-gradient waypoint for
+  # the 4.8% MIN climb grad note past D7.8 ZUE).
+  - id: ZUE78
+    type: named_fix
+    name: ZUE78
+    lat: 47.5155
+    lon: 8.6624
+
+briefing_strip:
+  final_approach_course_deg: 137
+  gs_intercept_altitude_ft: 4000
+  gs_angle_deg: 3.0
+  transition_altitude_ft: 5000
+  final_approach_speed_kt: 150
+  inop_components_table_applies: true
+  notes:
+    - severity: warning
+      text: "ILS Z uses DME arc transition from AMIKI / RILAX / GIPOL. Direct approach NA."
+    - severity: info
+      text: "Noise abatement: visual to RWY 14 prohibited before 0600 LT / after 2200 LT."
+    - severity: info
+      text: DME required.
+
+communications:
+  frequencies:
+    - role: atis
+      frequency_mhz: 129.000
+    - role: app
+      frequency_mhz: 124.700
+      label: ZURICH ARRIVAL
+    - role: twr
+      frequency_mhz: 118.100
+    - role: gnd
+      frequency_mhz: 121.900
+    - role: emergency
+      frequency_mhz: 121.500
+
+msa:
+  center_navaid_id: KLO
+  radius_nm: 25
+  bearing_reference: magnetic_inbound
+  sectors:
+    - start_bearing_deg: 0
+      end_bearing_deg: 90
+      altitude_ft: 8000
+    - start_bearing_deg: 90
+      end_bearing_deg: 180
+      altitude_ft: 12000
+    - start_bearing_deg: 180
+      end_bearing_deg: 270
+      altitude_ft: 10500
+    - start_bearing_deg: 270
+      end_bearing_deg: 360
+      altitude_ft: 7500
+
+transitions:
+  # AMIKI (NE) -- 12 DME arc CCW (left turn) to INTER. 88 deg sweep.
+  - name: AMIKI
+    type: approach_transition
+    legs:
+      - terminator: IF
+        transition_type: approach_transition
+        to_fix_id: AMIKI
+        altitude_constraint:
+          altitude_description: at_or_above
+          altitude_1_ft: 7000
+      - terminator: AF
+        transition_type: approach_transition
+        from_fix_id: AMIKI
+        to_fix_id: INTER
+        arc_center_fix_id: KLO
+        arc_radius_nm: 12.0
+        turn_direction: left
+        altitude_constraint:
+          altitude_description: at_or_above
+          altitude_1_ft: 6000
+
+  # RILAX (W) -- 12 DME arc CW (right turn) to INTER. 42 deg sweep.
+  - name: RILAX
+    type: approach_transition
+    legs:
+      - terminator: IF
+        transition_type: approach_transition
+        to_fix_id: RILAX
+        altitude_constraint:
+          altitude_description: at_or_above
+          altitude_1_ft: 7000
+      - terminator: AF
+        transition_type: approach_transition
+        from_fix_id: RILAX
+        to_fix_id: INTER
+        arc_center_fix_id: KLO
+        arc_radius_nm: 12.0
+        turn_direction: right
+        altitude_constraint:
+          altitude_description: at_or_above
+          altitude_1_ft: 6000
+
+  # GIPOL (S) -- 12 DME arc CW (right turn) to INTER. ~117 deg sweep
+  # along the W side of KLO; the high-terrain side is avoided by
+  # staying at 8000 ft until the arc exit.
+  - name: GIPOL
+    type: approach_transition
+    legs:
+      - terminator: IF
+        transition_type: approach_transition
+        to_fix_id: GIPOL
+        altitude_constraint:
+          altitude_description: at_or_above
+          altitude_1_ft: 8000
+      - terminator: AF
+        transition_type: approach_transition
+        from_fix_id: GIPOL
+        to_fix_id: INTER
+        arc_center_fix_id: KLO
+        arc_radius_nm: 12.0
+        turn_direction: right
+        altitude_constraint:
+          altitude_description: at_or_above
+          altitude_1_ft: 6000
+
+common_legs:
+  # Re-anchor at INTER so the downstream leg sequence is independent of
+  # which IAF transition was flown.
+  - terminator: IF
+    transition_type: common
+    to_fix_id: INTER
+    altitude_constraint:
+      altitude_description: at
+      altitude_1_ft: 6000
+  # Intermediate: CF inbound 137 M from INTER to FAF. Glidepath intercept.
+  - terminator: CF
+    transition_type: common
+    from_fix_id: INTER
+    to_fix_id: FL14F
+    course_deg: 137
+    altitude_constraint:
+      altitude_description: glide_slope_altitude
+      altitude_1_ft: 4000
+    speed_constraint:
+      speed_limit_kt: 180
+      speed_limit_description: at_or_below
+  # Final: CF 137 M from FAF to RWY 14 threshold on the 3.0 deg GS.
+  - terminator: CF
+    transition_type: common
+    from_fix_id: FL14F
+    to_fix_id: RW14
+    course_deg: 137
+    vertical_angle_deg: 3.0
+    altitude_constraint:
+      altitude_description: at
+      altitude_1_ft: 1416
+
+missed_approach:
+  # Real LSZH ILS/LOC RWY 14 missed approach (verbatim):
+  # "Initial climb clearance 4000'. Climb STRAIGHT AHEAD. At D5.1 IKL past
+  # the station, turn LEFT (MAX 210 KT, MIN BANK 20 deg) onto 359 deg to
+  # intercept R-231 ZUE inbound. At D7.8 ZUE continue climb to 7000'.
+  # Proceed to ZUE VOR. Cross ZUE VOR at MIN 6000' and intercept R-094
+  # ZUE to AMIKI. After passing D7.8 ZUE MIN climb grad 4.8% to 7000'
+  # due to airspace restrictions."
+  #
+  # Leg-terminator notes: CD (course-to-DME) and CI (course-to-intercept)
+  # are not yet implemented in legs.py, so we approximate both with CF to
+  # a named waypoint (IKL51, Z231I) on the commanded course. The
+  # rendered geometry is identical at plate scale -- the CF segment
+  # follows the great circle from the prior position to the named
+  # waypoint, which is placed exactly at the CD / intercept point.
+  text_description: >-
+    Initial climb clearance 4000'. Climb STRAIGHT AHEAD. At D5.1 IKL past
+    the station, turn LEFT (MAX 210 KT, MIN BANK 20 deg) onto 359 deg to
+    intercept R-231 ZUE inbound. At D7.8 ZUE continue climb to 7000'.
+    Proceed to ZUE VOR. Cross ZUE VOR at MIN 6000' and intercept R-094
+    ZUE to AMIKI. After passing D7.8 ZUE MIN climb grad 4.8% to 7000'
+    due to airspace restrictions.
+  icon_sequence: [climb, turn_left, intercept, direct]
+  legs:
+    # 1. Initial climb straight ahead on runway course (137 M) to 4000'.
+    - terminator: CA
+      transition_type: missed_approach
+      from_fix_id: RW14
+      course_deg: 137
+      altitude_constraint:
+        altitude_description: at_or_above
+        altitude_1_ft: 4000
+    # 2. Continuing 137 M past the station, terminate at D5.1 IKL
+    #    (IKL51 = 5.1 NM from KLO on course 140 T). Should be CD; using
+    #    CF-to-IKL51 as the fallback -- geometry is identical.
+    - terminator: CF
+      transition_type: missed_approach
+      from_fix_id: RW14
+      to_fix_id: IKL51
+      course_deg: 137
+    # 3. LEFT turn (MAX 210 KT, MIN BANK 20 deg) onto 359 M from IKL51,
+    #    intercept R-231 ZUE at Z231I. Should be CI; approximated as CF
+    #    from IKL51 to Z231I with course 359.
+    - terminator: CF
+      transition_type: missed_approach
+      from_fix_id: IKL51
+      to_fix_id: Z231I
+      course_deg: 359
+      turn_direction: left
+    # 4. Inbound on R-231 ZUE (course 051 M = reciprocal of 231). Cross
+    #    D7.8 ZUE (ZUE78) continuing climb to 7000. MIN 4.8% climb grad
+    #    past D7.8 per the airspace note.
+    - terminator: CF
+      transition_type: missed_approach
+      from_fix_id: Z231I
+      to_fix_id: ZUE78
+      course_deg: 51
+      altitude_constraint:
+        altitude_description: at_or_above
+        altitude_1_ft: 7000
+    # 5. Continue inbound 051 M to ZUE VOR. Cross ZUE at MIN 6000'.
+    - terminator: CF
+      transition_type: missed_approach
+      from_fix_id: ZUE78
+      to_fix_id: ZUE
+      course_deg: 51
+      altitude_constraint:
+        altitude_description: at_or_above
+        altitude_1_ft: 6000
+    # 6. Outbound from ZUE on R-094 (course 094 M) to AMIKI. End the
+    #    missed approach at AMIKI -- HF (hold-to-fix) is stubbed in
+    #    legs.py so no hold primitive is emitted, but AMIKI is the
+    #    published MAHP.
+    - terminator: CF
+      transition_type: missed_approach
+      from_fix_id: ZUE
+      to_fix_id: AMIKI
+      course_deg: 94
+      altitude_constraint:
+        altitude_description: at_or_above
+        altitude_1_ft: 7000
+
+minima:
+  - variant: s_ils
+    category: A
+    da_ft_msl: 1616
+    dh_ft_agl: 200
+    visibility_sm: 0.50
+    rvr_ft: 2400
+  - variant: s_ils
+    category: B
+    da_ft_msl: 1616
+    dh_ft_agl: 200
+    visibility_sm: 0.50
+    rvr_ft: 2400
+  - variant: s_ils
+    category: C
+    da_ft_msl: 1616
+    dh_ft_agl: 200
+    visibility_sm: 0.50
+    rvr_ft: 2600
+  - variant: s_ils
+    category: D
+    da_ft_msl: 1616
+    dh_ft_agl: 200
+    visibility_sm: 0.75
+    rvr_ft: 4000
+  - variant: circling
+    category: A
+    mda_ft_msl: 1920
+    mdh_ft_agl: 504
+    visibility_sm: 1.00
+  - variant: circling
+    category: B
+    mda_ft_msl: 1920
+    mdh_ft_agl: 504
+    visibility_sm: 1.50
+  - variant: circling
+    category: C
+    mda_ft_msl: 2120
+    mdh_ft_agl: 704
+    visibility_sm: 2.00
+  - variant: circling
+    category: D
+    mda_ft_msl: 2220
+    mdh_ft_agl: 804
+    visibility_sm: 2.50
+
+runways:
+  - ident_low_end: "14"
+    ident_high_end: "32"
+    low_threshold_lat_lon: { lat: 47.489, lon: 8.531 }
+    high_threshold_lat_lon: { lat: 47.453, lon: 8.565 }
+    length_ft: 10820
+    width_ft: 197
+    surface: asphalt
+    tdze_low_ft: 1416
+    tdze_high_ft: 1402
+    magnetic_bearing_low_end_deg: 137
+    lighting: [HIRL, PAPI, MALSR, CL]
+  - ident_low_end: "10"
+    ident_high_end: "28"
+    low_threshold_lat_lon: { lat: 47.458, lon: 8.528 }
+    high_threshold_lat_lon: { lat: 47.461, lon: 8.573 }
+    length_ft: 8200
+    width_ft: 197
+    surface: asphalt
+    tdze_low_ft: 1391
+    tdze_high_ft: 1416
+    magnetic_bearing_low_end_deg: 100
+    lighting: [HIRL, PAPI]
+  - ident_low_end: "16"
+    ident_high_end: "34"
+    low_threshold_lat_lon: { lat: 47.479, lon: 8.536 }
+    high_threshold_lat_lon: { lat: 47.449, lon: 8.554 }
+    length_ft: 12139
+    width_ft: 197
+    surface: asphalt
+    tdze_low_ft: 1402
+    tdze_high_ft: 1391
+    magnetic_bearing_low_end_deg: 163
+    lighting: [HIRL, PAPI, MALSR]

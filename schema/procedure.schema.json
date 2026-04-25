@@ -1,0 +1,524 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/open-plates/schema/v1/procedure.schema.json",
+  "title": "Procedure",
+  "description": "v1 draft data model for a single aeronautical procedure document (SID, STAR, IAP, airport diagram, or reference chart). Field vocabulary borrows ARINC 424 path terminators. The generator consumes these documents to render human-readable charts (SVG/PDF/PNG); sim/FMS interop is not a goal. Fictional or user ICAO codes (e.g., X* range) are permitted.",
+  "type": "object",
+  "$ref": "#/$defs/Procedure",
+
+  "$defs": {
+    "LatLon": {
+      "type": "object",
+      "required": ["lat", "lon"],
+      "properties": {
+        "lat": { "type": "number", "minimum": -90, "maximum": 90 },
+        "lon": { "type": "number", "minimum": -180, "maximum": 180 },
+        "elevation_ft": { "type": "number" }
+      },
+      "additionalProperties": false
+    },
+
+    "Fix": {
+      "type": "object",
+      "description": "Non-navaid fix. For navaids use the Navaid $def (distinguished by 'type: navaid').",
+      "required": ["id", "type", "lat", "lon"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 5, "description": "1-5 char ident unique within the document" },
+        "name": { "type": "string" },
+        "type": {
+          "type": "string",
+          "enum": ["named_fix", "unnamed", "runway_threshold", "airport_reference_point"]
+        },
+        "lat": { "type": "number", "minimum": -90, "maximum": 90 },
+        "lon": { "type": "number", "minimum": -180, "maximum": 180 },
+        "elevation_ft": { "type": "number" }
+      },
+      "additionalProperties": false
+    },
+
+    "Navaid": {
+      "type": "object",
+      "required": ["id", "type", "lat", "lon", "navaid_type"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 5 },
+        "name": { "type": "string" },
+        "type": { "const": "navaid" },
+        "lat": { "type": "number", "minimum": -90, "maximum": 90 },
+        "lon": { "type": "number", "minimum": -180, "maximum": 180 },
+        "elevation_ft": { "type": "number" },
+        "navaid_type": {
+          "type": "string",
+          "enum": ["vor", "vor_dme", "vortac", "dme", "tacan", "ndb", "loc", "gs", "ils_dme", "marker"]
+        },
+        "frequency_mhz": { "type": "number", "minimum": 108.0, "maximum": 117.95, "description": "VOR/LOC/ILS frequency; use frequency_khz for NDB" },
+        "frequency_khz": { "type": "number", "minimum": 190, "maximum": 1750, "description": "NDB frequency" },
+        "channel": { "type": "string", "description": "TACAN/VORTAC channel e.g. 'ch 78X'" },
+        "ident_morse": { "type": "string" },
+        "station_declination_deg": { "type": "number", "minimum": -180, "maximum": 180 },
+        "usable_range_nm": { "type": "number", "minimum": 0 },
+        "bearing_true_deg": { "type": "number", "minimum": 0, "maximum": 360, "description": "Localizer true bearing; usually runway heading but not always exact" }
+      },
+      "additionalProperties": false
+    },
+
+    "AltitudeConstraint": {
+      "type": "object",
+      "required": ["altitude_description"],
+      "description": "Altitude constraint at a leg endpoint. 'altitude_1_ft' is primary; 'altitude_2_ft' is only set for 'between'. 'glide_slope_altitude' and 'procedure_altitude' are preserved distinctly from 'at' — see open questions in README.",
+      "properties": {
+        "altitude_description": {
+          "type": "string",
+          "enum": ["at", "at_or_above", "at_or_below", "between", "glide_slope_altitude", "glide_slope_at_or_above", "procedure_altitude"]
+        },
+        "altitude_1_ft": { "type": "number" },
+        "altitude_2_ft": { "type": "number" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "altitude_description": { "const": "between" } } },
+          "then": { "required": ["altitude_1_ft", "altitude_2_ft"] }
+        },
+        {
+          "if": { "properties": { "altitude_description": { "not": { "const": "between" } } } },
+          "then": { "required": ["altitude_1_ft"] }
+        }
+      ],
+      "additionalProperties": false
+    },
+
+    "SpeedConstraint": {
+      "type": "object",
+      "required": ["speed_limit_kt", "speed_limit_description"],
+      "properties": {
+        "speed_limit_kt": { "type": "integer", "minimum": 0, "maximum": 999 },
+        "speed_limit_description": {
+          "type": "string",
+          "enum": ["at", "at_or_below", "at_or_above", "mandatory"]
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "HoldParams": {
+      "type": "object",
+      "required": ["inbound_course_deg"],
+      "properties": {
+        "inbound_course_deg": { "type": "number", "minimum": 0, "maximum": 360 },
+        "turn_direction": { "type": "string", "enum": ["left", "right"] },
+        "leg_time_sec": { "type": "number", "minimum": 0 },
+        "leg_distance_nm": { "type": "number", "minimum": 0 },
+        "max_hold_altitude_ft": { "type": "number" },
+        "min_hold_altitude_ft": { "type": "number" }
+      },
+      "additionalProperties": false
+    },
+
+    "ProcedureTurnParams": {
+      "type": "object",
+      "required": ["pt_style", "pt_side", "outbound_course_deg"],
+      "properties": {
+        "pt_style": { "type": "string", "enum": ["45_180", "80_260", "teardrop"] },
+        "pt_side": { "type": "string", "enum": ["left", "right"] },
+        "outbound_course_deg": { "type": "number", "minimum": 0, "maximum": 360 },
+        "outbound_distance_nm": { "type": "number", "minimum": 0 },
+        "outbound_time_sec": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+
+    "LegCommon": {
+      "type": "object",
+      "properties": {
+        "from_fix_id": { "type": "string" },
+        "to_fix_id": { "type": "string" },
+        "course_deg": { "type": "number", "minimum": 0, "maximum": 360 },
+        "heading_deg": { "type": "number", "minimum": 0, "maximum": 360 },
+        "turn_direction": { "type": "string", "enum": ["left", "right", "either"] },
+        "transition_type": {
+          "type": "string",
+          "enum": ["common", "enroute_transition", "runway_transition", "missed_approach", "approach_transition"]
+        },
+        "transition_name": { "type": "string" },
+        "distance_nm": { "type": "number", "minimum": 0 },
+        "radial_deg": { "type": "number", "minimum": 0, "maximum": 360 },
+        "radial_fix_id": { "type": "string" },
+        "arc_center_fix_id": { "type": "string" },
+        "arc_radius_nm": { "type": "number", "minimum": 0 },
+        "arc_start_radial_deg": { "type": "number", "minimum": 0, "maximum": 360 },
+        "arc_end_radial_deg": { "type": "number", "minimum": 0, "maximum": 360 },
+        "fly_over": { "type": "boolean", "default": false },
+        "altitude_constraint": { "$ref": "#/$defs/AltitudeConstraint" },
+        "speed_constraint": { "$ref": "#/$defs/SpeedConstraint" },
+        "vertical_angle_deg": { "type": "number", "minimum": 0, "maximum": 10 },
+        "hold": { "$ref": "#/$defs/HoldParams" },
+        "procedure_turn": { "$ref": "#/$defs/ProcedureTurnParams" },
+        "notes": { "type": "string" }
+      }
+    },
+
+    "Leg": {
+      "type": "object",
+      "required": ["terminator", "transition_type"],
+      "properties": {
+        "terminator": {
+          "type": "string",
+          "enum": ["IF", "TF", "CF", "DF", "CA", "VA", "FA", "CD", "VD", "CR", "VR", "CI", "VI", "AF", "RF", "HA", "HF", "HM", "PI"]
+        }
+      },
+      "allOf": [
+        { "$ref": "#/$defs/LegCommon" }
+      ],
+      "oneOf": [
+        { "properties": { "terminator": { "const": "IF" } }, "required": ["terminator", "to_fix_id"] },
+        { "properties": { "terminator": { "const": "TF" } }, "required": ["terminator", "to_fix_id"] },
+        { "properties": { "terminator": { "const": "CF" } }, "required": ["terminator", "to_fix_id", "course_deg"] },
+        { "properties": { "terminator": { "const": "DF" } }, "required": ["terminator", "to_fix_id"] },
+        { "properties": { "terminator": { "const": "CA" } }, "required": ["terminator", "course_deg", "altitude_constraint"] },
+        { "properties": { "terminator": { "const": "VA" } }, "required": ["terminator", "heading_deg", "altitude_constraint"] },
+        { "properties": { "terminator": { "const": "FA" } }, "required": ["terminator", "from_fix_id", "course_deg", "altitude_constraint"] },
+        { "properties": { "terminator": { "const": "CD" } }, "required": ["terminator", "course_deg", "radial_fix_id", "distance_nm"] },
+        { "properties": { "terminator": { "const": "VD" } }, "required": ["terminator", "heading_deg", "radial_fix_id", "distance_nm"] },
+        { "properties": { "terminator": { "const": "CR" } }, "required": ["terminator", "course_deg", "radial_fix_id", "radial_deg"] },
+        { "properties": { "terminator": { "const": "VR" } }, "required": ["terminator", "heading_deg", "radial_fix_id", "radial_deg"] },
+        { "properties": { "terminator": { "const": "CI" } }, "required": ["terminator", "course_deg"] },
+        { "properties": { "terminator": { "const": "VI" } }, "required": ["terminator", "heading_deg"] },
+        { "properties": { "terminator": { "const": "AF" } }, "required": ["terminator", "to_fix_id", "arc_center_fix_id", "arc_radius_nm", "turn_direction"] },
+        { "properties": { "terminator": { "const": "RF" } }, "required": ["terminator", "to_fix_id", "arc_center_fix_id", "arc_radius_nm", "turn_direction"] },
+        { "properties": { "terminator": { "const": "HA" } }, "required": ["terminator", "to_fix_id", "hold", "altitude_constraint"] },
+        { "properties": { "terminator": { "const": "HF" } }, "required": ["terminator", "to_fix_id", "hold"] },
+        { "properties": { "terminator": { "const": "HM" } }, "required": ["terminator", "to_fix_id", "hold"] },
+        { "properties": { "terminator": { "const": "PI" } }, "required": ["terminator", "to_fix_id", "procedure_turn"] }
+      ]
+    },
+
+    "Transition": {
+      "type": "object",
+      "required": ["name", "type", "legs"],
+      "properties": {
+        "name": { "type": "string", "description": "e.g. 'ABC' for ABC transition, or 'RWY 13' for runway transition" },
+        "type": {
+          "type": "string",
+          "enum": ["enroute_transition", "runway_transition", "approach_transition", "common"]
+        },
+        "computer_code": { "type": "string" },
+        "legs": { "type": "array", "items": { "$ref": "#/$defs/Leg" }, "minItems": 1 }
+      },
+      "additionalProperties": false
+    },
+
+    "MissedApproach": {
+      "type": "object",
+      "required": ["text_description", "legs"],
+      "properties": {
+        "text_description": { "type": "string" },
+        "icon_sequence": {
+          "type": "array",
+          "maxItems": 4,
+          "items": { "type": "string", "enum": ["climb", "turn_left", "turn_right", "direct", "hold", "intercept", "vector"] }
+        },
+        "climb_gradient_ft_per_nm": { "type": "number", "minimum": 0, "description": "Only if non-standard (> 200 ft/nm)" },
+        "legs": { "type": "array", "items": { "$ref": "#/$defs/Leg" }, "minItems": 1 }
+      },
+      "additionalProperties": false
+    },
+
+    "Minima": {
+      "type": "object",
+      "required": ["variant", "category"],
+      "description": "One row of the minima table — a single (variant x category) cell flattened. Set 'not_authorized: true' for NA cells; in that case none of the minima numbers (visibility_sm, da/mda, dh/mdh, hat/haa) are required.",
+      "properties": {
+        "variant": {
+          "type": "string",
+          "enum": ["s_ils", "s_loc", "s_loc_dme", "s_vor", "s_vor_dme", "s_ndb", "s_gps", "rnav_lpv", "rnav_lnav_vnav", "rnav_lnav_plus_v", "rnav_lnav", "circling"]
+        },
+        "category": { "type": "string", "enum": ["A", "B", "C", "D", "E"] },
+        "da_ft_msl": { "type": "number" },
+        "mda_ft_msl": { "type": "number" },
+        "dh_ft_agl": { "type": "number" },
+        "mdh_ft_agl": { "type": "number" },
+        "visibility_sm": { "type": "number", "minimum": 0, "multipleOf": 0.25 },
+        "rvr_ft": { "type": "integer", "minimum": 0 },
+        "ceiling_ft_agl": { "type": "number" },
+        "hat_ft": { "type": "number" },
+        "haa_ft": { "type": "number" },
+        "notes_ref": { "type": "string" },
+        "not_authorized": { "type": "boolean", "default": false }
+      },
+      "if": {
+        "properties": { "not_authorized": { "const": true } },
+        "required": ["not_authorized"]
+      },
+      "then": {
+        "description": "NA rows: no minima values required."
+      },
+      "else": {
+        "required": ["visibility_sm"]
+      },
+      "additionalProperties": false
+    },
+
+    "MSASector": {
+      "type": "object",
+      "required": ["start_bearing_deg", "end_bearing_deg", "altitude_ft"],
+      "properties": {
+        "start_bearing_deg": { "type": "number", "minimum": 0, "maximum": 360 },
+        "end_bearing_deg": { "type": "number", "minimum": 0, "maximum": 360 },
+        "altitude_ft": { "type": "number" },
+        "sub_radius_nm": { "type": "number", "minimum": 0, "description": "Optional inner-ring radius for split sectors (e.g. 15 NM at lower alt, 15-25 NM at higher alt)" }
+      },
+      "additionalProperties": false
+    },
+
+    "MSA": {
+      "type": "object",
+      "required": ["radius_nm", "sectors", "bearing_reference"],
+      "properties": {
+        "center_navaid_id": { "type": "string" },
+        "center_fix_id": { "type": "string" },
+        "radius_nm": { "type": "number", "minimum": 0, "default": 25 },
+        "sectors": { "type": "array", "items": { "$ref": "#/$defs/MSASector" }, "minItems": 1 },
+        "bearing_reference": { "type": "string", "enum": ["magnetic_inbound", "true_inbound"] }
+      },
+      "additionalProperties": false
+    },
+
+    "CommFrequency": {
+      "type": "object",
+      "required": ["role", "frequency_mhz"],
+      "properties": {
+        "role": { "type": "string", "enum": ["atis", "clnc_del", "gnd", "twr", "dep", "app", "ctaf_unicom", "emergency"] },
+        "frequency_mhz": { "type": "number", "minimum": 108.0, "maximum": 137.0 },
+        "label": { "type": "string", "description": "Coverage annotation e.g. 'East', 'ARR', 'West sector'" },
+        "remark": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+
+    "Communications": {
+      "type": "object",
+      "properties": {
+        "frequencies": { "type": "array", "items": { "$ref": "#/$defs/CommFrequency" } }
+      },
+      "additionalProperties": false
+    },
+
+    "Runway": {
+      "type": "object",
+      "required": [
+        "ident_low_end", "ident_high_end",
+        "low_threshold_lat_lon", "high_threshold_lat_lon",
+        "length_ft", "width_ft", "surface",
+        "tdze_low_ft", "tdze_high_ft", "magnetic_bearing_low_end_deg"
+      ],
+      "properties": {
+        "ident_low_end": { "type": "string" },
+        "ident_high_end": { "type": "string" },
+        "low_threshold_lat_lon": { "$ref": "#/$defs/LatLon" },
+        "high_threshold_lat_lon": { "$ref": "#/$defs/LatLon" },
+        "length_ft": { "type": "number", "minimum": 0 },
+        "width_ft": { "type": "number", "minimum": 0 },
+        "surface": {
+          "type": "string",
+          "enum": ["asphalt", "concrete", "grass", "dirt", "gravel", "water", "snow"]
+        },
+        "tdze_low_ft": { "type": "number" },
+        "tdze_high_ft": { "type": "number" },
+        "magnetic_bearing_low_end_deg": { "type": "number", "minimum": 0, "maximum": 360 },
+        "lighting": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["ALS", "MALS", "MALSR", "ODALS", "REIL", "PAPI", "VASI", "HIRL", "MIRL", "LIRL", "CL"] }
+        },
+        "displaced_threshold_low_ft": { "type": "number" },
+        "displaced_threshold_high_ft": { "type": "number" },
+        "lda_ft": { "type": "number" },
+        "tora_ft": { "type": "number" },
+        "toda_ft": { "type": "number" },
+        "asda_ft": { "type": "number" }
+      },
+      "additionalProperties": false
+    },
+
+    "Taxiway": {
+      "type": "object",
+      "required": ["ident", "geometry"],
+      "properties": {
+        "ident": { "type": "string" },
+        "geometry": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/LatLon" },
+          "minItems": 2
+        },
+        "width_ft": { "type": "number", "minimum": 0 },
+        "surface": {
+          "type": "string",
+          "enum": ["asphalt", "concrete", "grass", "dirt", "gravel"]
+        },
+        "hold_short_lines": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["location", "restricted_runway"],
+            "properties": {
+              "location": { "$ref": "#/$defs/LatLon" },
+              "restricted_runway": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "HotSpot": {
+      "type": "object",
+      "required": ["id", "geometry", "description"],
+      "properties": {
+        "id": { "type": "string" },
+        "geometry": { "$ref": "#/$defs/LatLon" },
+        "description": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+
+    "AirportDiagram": {
+      "type": "object",
+      "required": ["airport_reference_point", "runways", "taxiways"],
+      "properties": {
+        "airport_reference_point": { "$ref": "#/$defs/LatLon" },
+        "runways": { "type": "array", "items": { "$ref": "#/$defs/Runway" } },
+        "taxiways": { "type": "array", "items": { "$ref": "#/$defs/Taxiway" } },
+        "hot_spots": { "type": "array", "items": { "$ref": "#/$defs/HotSpot" } },
+        "lat_lon_tick_interval_sec": { "type": "number", "minimum": 0, "default": 30 }
+      },
+      "additionalProperties": false
+    },
+
+    "BriefingStrip": {
+      "type": "object",
+      "properties": {
+        "final_approach_course_deg": { "type": "number", "minimum": 0, "maximum": 360 },
+        "final_approach_speed_kt": {
+          "type": "number",
+          "minimum": 40,
+          "maximum": 400,
+          "description": "Planned final-approach TAS (knots). Used by the renderer to size fly-by turn radii — optional; if omitted the renderer falls back to leg speed constraints, then the highest minima category speed, then 140 kt."
+        },
+        "gs_intercept_altitude_ft": { "type": "number" },
+        "gs_angle_deg": { "type": "number", "minimum": 0, "maximum": 10 },
+        "transition_altitude_ft": { "type": "number" },
+        "transition_level_fl": { "type": "integer", "minimum": 0 },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["text"],
+            "properties": {
+              "severity": { "type": "string", "enum": ["info", "warning", "critical"], "default": "info" },
+              "text": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "inop_components_table_applies": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+
+    "Procedure": {
+      "type": "object",
+      "required": [
+        "airport_icao", "procedure_id", "procedure_type",
+        "amendment", "airac_cycle", "effective_date",
+        "mag_variation_deg", "reference_datum", "fixes"
+      ],
+      "properties": {
+        "airport_icao": { "type": "string", "minLength": 3, "maxLength": 5, "description": "ICAO 4-letter ident. Fictional/user codes (e.g. X*) are allowed." },
+        "airport_iata": { "type": "string", "minLength": 2, "maxLength": 4 },
+        "procedure_id": { "type": "string" },
+        "procedure_computer_code": { "type": "string" },
+        "procedure_type": { "type": "string", "enum": ["sid", "star", "iap", "airport_diagram", "reference"] },
+        "approach_subtype": {
+          "type": "string",
+          "enum": ["ils", "loc", "rnav_gps", "rnav_lpv", "rnav_lnav", "rnav_lnav_vnav", "vor", "vor_dme", "ndb", "tacan", "visual", "cvfp"]
+        },
+        "amendment": { "type": "string", "description": "Accepts suffixes like '4A'" },
+        "airac_cycle": { "type": "string", "pattern": "^[0-9]{4}$", "description": "YYCC, e.g. '2604'" },
+        "effective_date": { "type": "string", "format": "date" },
+        "expires_date": { "type": "string", "format": "date" },
+        "mag_variation_deg": { "type": "number", "minimum": -180, "maximum": 180 },
+        "mag_variation_year": { "type": "integer" },
+        "reference_datum": { "type": "string", "default": "WGS84" },
+
+        "fixes": {
+          "type": "array",
+          "description": "Reusable fix/navaid table. Legs reference entries by 'id'.",
+          "items": { "oneOf": [ { "$ref": "#/$defs/Navaid" }, { "$ref": "#/$defs/Fix" } ] }
+        },
+
+        "transitions": { "type": "array", "items": { "$ref": "#/$defs/Transition" } },
+        "common_legs": { "type": "array", "items": { "$ref": "#/$defs/Leg" }, "description": "Legs shared across transitions (intermediate/final for IAP, common segment for SID/STAR)" },
+        "missed_approach": { "$ref": "#/$defs/MissedApproach" },
+
+        "minima": { "type": "array", "items": { "$ref": "#/$defs/Minima" } },
+        "tdze_ft_msl": { "type": "number" },
+        "airport_elev_ft_msl": { "type": "number" },
+        "runway_ident": { "type": "string" },
+
+        "msa": { "$ref": "#/$defs/MSA" },
+        "communications": { "$ref": "#/$defs/Communications" },
+        "briefing_strip": { "$ref": "#/$defs/BriefingStrip" },
+
+        "runways": { "type": "array", "items": { "$ref": "#/$defs/Runway" }, "description": "Runway reference table; may be partial for SID/STAR/IAP and complete for airport_diagram" },
+        "airport_diagram": { "$ref": "#/$defs/AirportDiagram" },
+
+        "basemap": {
+          "description": "Optional geographic basemap underlay rendered behind the plan-view procedure path. Pass 'true' to auto-detect a covering region from procedure fix coordinates, or an object with optional 'region' slug (auto-detected when omitted) and layer toggles.",
+          "oneOf": [
+            { "const": true },
+            {
+              "type": "object",
+              "properties": {
+                "region": { "type": "string", "description": "Filename slug under data/basemap/. Auto-detected from fix coordinates when omitted." },
+                "show_sea": { "type": "boolean" },
+                "show_coastline": { "type": "boolean" },
+                "show_roads": { "type": "boolean" },
+                "show_rivers": { "type": "boolean" },
+                "show_streams": { "type": "boolean" },
+                "show_lakes": { "type": "boolean" },
+                "show_cities": { "type": "boolean" },
+                "show_city_labels": { "type": "boolean" },
+                "city_max_rank": { "type": "integer", "minimum": 0, "maximum": 5 },
+                "road_max_rank": { "type": "integer", "minimum": 0, "maximum": 5 },
+                "waterway_max_rank": { "type": "integer", "minimum": 0, "maximum": 5 },
+                "label_density": { "type": "string", "enum": ["sparse", "normal", "dense"] }
+              },
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+
+      "allOf": [
+        {
+          "if": { "properties": { "procedure_type": { "const": "iap" } }, "required": ["procedure_type"] },
+          "then": {
+            "required": ["approach_subtype", "minima", "tdze_ft_msl", "airport_elev_ft_msl", "missed_approach"]
+          }
+        },
+        {
+          "if": { "properties": { "procedure_type": { "const": "airport_diagram" } }, "required": ["procedure_type"] },
+          "then": { "required": ["airport_diagram"] }
+        },
+        {
+          "if": {
+            "properties": { "procedure_type": { "enum": ["sid", "star"] } },
+            "required": ["procedure_type"]
+          },
+          "then": { "required": ["procedure_computer_code"] }
+        }
+      ],
+
+      "additionalProperties": false
+    }
+  }
+}

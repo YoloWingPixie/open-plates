@@ -1,0 +1,20 @@
+{
+  "spangdahlem": {
+    "name": "Spangdahlem / Eifel / Luxembourg",
+    "bbox": [4.8, 48.8, 8.2, 51.0],
+    "center": [50.0, 6.5],
+    "description": "Eifel region, Mosel valley, Luxembourg border, ~200 NM wide"
+  },
+  "zurich": {
+    "name": "Zurich / Swiss Plateau / Alps",
+    "bbox": [7.0, 46.5, 10.2, 48.5],
+    "center": [47.5, 8.6],
+    "description": "Swiss Mittelland and pre-Alps, ~180 NM wide"
+  },
+  "batumi": {
+    "name": "Batumi / Caucasus / Black Sea coast",
+    "bbox": [40.0, 40.8, 43.0, 42.8],
+    "center": [41.8, 41.5],
+    "description": "Black Sea coast, Georgian Caucasus, ~180 NM wide"
+  }
+}

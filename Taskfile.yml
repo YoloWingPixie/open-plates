@@ -1,0 +1,141 @@
+# https://taskfile.dev
+
+version: "3"
+
+vars:
+  PROJECT_NAME: open-plates
+  SCHEMA_PATH: schema/procedure.schema.json
+  EXAMPLES_DIR: examples
+  SCRIPTS_DIR: scripts
+  OUT_DIR: out
+
+tasks:
+  default:
+    desc: "Show all available tasks"
+    cmds:
+      - task --list
+
+  # ── Setup ──────────────────────────────────────────────────
+
+  setup:
+    desc: "Install dependencies and sync the venv"
+    cmds:
+      - uv sync
+
+  setup:dev:
+    desc: "Install all dependencies including dev group"
+    cmds:
+      - uv sync --all-groups
+
+  # ── CI/CD ───────────────────────────────────────────────────
+
+  test:
+    desc: "Run the test suite"
+    deps: [setup:dev]
+    cmds:
+      - uv run pytest
+
+  test:verbose:
+    desc: "Run the test suite with verbose output"
+    deps: [setup:dev]
+    cmds:
+      - uv run pytest -v
+
+  test:watch:
+    desc: "Re-run tests on file changes"
+    deps: [test]
+    watch: true
+    sources:
+      - "src/**/*.py"
+      - "tests/**/*.py"
+      - "{{.SCHEMA_PATH}}"
+
+  # ── Validation ─────────────────────────────────────────────
+
+  validate:
+    desc: "Validate a procedure YAML (usage: task validate -- path/to/file.yaml)"
+    cmds:
+      - uv run python {{.SCRIPTS_DIR}}/validate.py {{.CLI_ARGS}}
+
+  validate:all:
+    desc: "Validate all example procedures"
+    cmds:
+      - uv run python {{.SCRIPTS_DIR}}/validate.py {{.EXAMPLES_DIR}}/*.yaml
+
+  # ── Rendering ──────────────────────────────────────────────
+
+  render:
+    desc: "Render a procedure to SVG/PDF/PNG (usage: task render -- input.yaml output.svg)"
+    cmds:
+      - mkdir -p {{.OUT_DIR}}
+      - uv run python {{.SCRIPTS_DIR}}/render.py {{.CLI_ARGS}}
+
+  render:example:
+    desc: "Render the UGSB ILS example to PDF"
+    cmds:
+      - mkdir -p {{.OUT_DIR}}
+      - uv run python {{.SCRIPTS_DIR}}/render.py {{.EXAMPLES_DIR}}/ugsb-ils-rwy-13.yaml {{.OUT_DIR}}/ugsb-ils-rwy-13.pdf
+
+  render:all:
+    desc: "Render all example procedures to PDF"
+    cmds:
+      - mkdir -p {{.OUT_DIR}}
+      - cmd: |
+          for f in {{.EXAMPLES_DIR}}/*.yaml; do
+            base=$(basename "$f" .yaml)
+            echo "Rendering $base..."
+            uv run python {{.SCRIPTS_DIR}}/render.py "$f" "{{.OUT_DIR}}/$base.pdf"
+          done
+
+  render:svg:
+    desc: "Render a procedure to SVG (usage: task render:svg -- input.yaml output.svg)"
+    cmds:
+      - mkdir -p {{.OUT_DIR}}
+      - uv run python {{.SCRIPTS_DIR}}/render.py {{.CLI_ARGS}}
+
+  # ── Basemap ────────────────────────────────────────────────
+
+  basemap:
+    desc: "Build all basemap layers for a region (usage: task basemap -- <region_id>)"
+    cmds:
+      - uv run python {{.SCRIPTS_DIR}}/build_basemap_all.py {{.CLI_ARGS}}
+
+  basemap:hillshade:
+    desc: "Build hillshade layer (usage: task basemap:hillshade -- <region_id>)"
+    cmds:
+      - uv run python {{.SCRIPTS_DIR}}/build_basemap_hillshade.py {{.CLI_ARGS}}
+
+  basemap:waterways:
+    desc: "Build waterways layer (usage: task basemap:waterways -- <region_id>)"
+    cmds:
+      - uv run python {{.SCRIPTS_DIR}}/build_basemap_waterways.py {{.CLI_ARGS}}
+
+  basemap:roads:
+    desc: "Build roads layer (usage: task basemap:roads -- <region_id>)"
+    cmds:
+      - uv run python {{.SCRIPTS_DIR}}/build_basemap_roads.py {{.CLI_ARGS}}
+
+  basemap:obstacles:
+    desc: "Build obstacles layer (usage: task basemap:obstacles -- <region_id>)"
+    cmds:
+      - uv run python {{.SCRIPTS_DIR}}/build_basemap_obstacles.py {{.CLI_ARGS}}
+
+  basemap:populated:
+    desc: "Build populated places layer (usage: task basemap:populated -- <region_id>)"
+    cmds:
+      - uv run python {{.SCRIPTS_DIR}}/build_basemap_populated.py {{.CLI_ARGS}}
+
+  # ── Housekeeping ───────────────────────────────────────────
+
+  clean:
+    desc: "Remove build outputs and caches"
+    cmds:
+      - rm -rf {{.OUT_DIR}}
+      - find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+      - find . -type d -name .pytest_cache -exec rm -rf {} + 2>/dev/null || true
+
+  ci:
+    desc: "Run all CI checks (validate examples + tests)"
+    cmds:
+      - task: validate:all
+      - task: test

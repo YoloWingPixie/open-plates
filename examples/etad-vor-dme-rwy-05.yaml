@@ -1,0 +1,321 @@
+# VOR/DME arc approach to RWY 05 at Spangdahlem AB (ETAD).
+# Fictional-realistic: coordinates approximate real ETAD; frequencies and
+# procedure design are invented but plausible. Exercises the ARINC 424
+# AF (Arc-to-Fix) leg terminator: a 10 DME arc around SPA TACAN with a
+# 45°-off-runway overfly transition and a "circle to land" rollout onto
+# the RWY 05 final approach course.
+#
+# Validates against ../schema/procedure.schema.json.
+
+airport_icao: ETAD
+procedure_id: VOR/DME RWY 05
+procedure_type: iap
+approach_subtype: vor_dme
+amendment: "1"
+airac_cycle: "2604"
+effective_date: "2026-04-16"
+expires_date: "2026-05-14"
+mag_variation_deg: 2.0
+mag_variation_year: 2026
+reference_datum: WGS84
+
+tdze_ft_msl: 1196
+airport_elev_ft_msl: 1196
+runway_ident: "05"
+
+basemap:
+  region: spangdahlem
+  show_rivers: true
+  show_roads: true
+  show_cities: true
+  show_city_labels: true
+
+fixes:
+  # Primary navaid — SPA TACAN is the arc center and the procedure's DME
+  # reference. Same location as ETAD's ILS 23 example.
+  - id: SPA
+    type: navaid
+    name: SPANGDAHLEM
+    navaid_type: tacan
+    lat: 49.973
+    lon: 6.692
+    frequency_mhz: 113.70
+    station_declination_deg: 2.0
+    usable_range_nm: 40
+
+  - id: DKB
+    type: navaid
+    name: DIEKIRCH
+    navaid_type: vor_dme
+    lat: 49.870
+    lon: 6.160
+    frequency_mhz: 114.35
+    station_declination_deg: 2.0
+    usable_range_nm: 80
+
+  # IAF — 15 DME east of SPA on R-090. Arriving traffic from the east
+  # intercepts the procedure here.
+  - id: IAFE
+    type: named_fix
+    name: IAFE
+    lat: 49.9724
+    lon: 7.0804
+
+  # Arc-entry: 10 DME east of SPA on R-090. First point on the 10 DME
+  # arc; transition flies straight in from IAFE to here.
+  - id: ARC1E
+    type: named_fix
+    name: ARC1E
+    lat: 49.9727
+    lon: 6.9510
+
+  # Overfly exit: 10 DME west of SPA on R-270. Aircraft crosses the field
+  # on a westerly track (45° off the RWY 23 final approach of 227°) from
+  # ARC1E to here, then rolls onto the 10 DME arc.
+  - id: ARC1W
+    type: named_fix
+    name: ARC1W
+    lat: 49.9727
+    lon: 6.4330
+
+  # Northern MAHP — 10 DME north of SPA on R-360, used as the missed
+  # approach hold fix.
+  - id: ARC1N
+    type: named_fix
+    name: ARC1N
+    lat: 50.1396
+    lon: 6.6920
+
+  # Arc-exit / FAC rollout — 10 DME southwest of SPA on R-227 (extended
+  # RWY 05 final approach course). AF leg terminates here; aircraft
+  # rolls out heading ~047° inbound.
+  - id: AR05
+    type: named_fix
+    name: AR05
+    lat: 49.8593
+    lon: 6.5030
+
+  # Final approach fix — 5 DME on R-227. Glidepath-intercept altitude.
+  - id: ED05F
+    type: named_fix
+    name: ED05F
+    lat: 49.9162
+    lon: 6.5974
+
+  # Landing threshold — RWY 05 low end. Matches the straight-in ILS
+  # example's runway low-end coordinates.
+  - id: RW05
+    type: runway_threshold
+    name: RWY 05 THRESHOLD
+    lat: 49.958
+    lon: 6.671
+    elevation_ft: 1196
+
+briefing_strip:
+  final_approach_course_deg: 47
+  gs_intercept_altitude_ft: 3000
+  gs_angle_deg: 3.0
+  transition_altitude_ft: 5000
+  final_approach_speed_kt: 130
+  inop_components_table_applies: true
+  notes:
+    - severity: info
+      text: DME required. SPA TACAN co-located.
+    - severity: warning
+      text: "Arc minima apply only when established on the 10 DME arc."
+    - severity: info
+      text: "Procedure turn NA. Radar vectors to ARC1E or direct IAFE only."
+
+communications:
+  frequencies:
+    - role: atis
+      frequency_mhz: 124.85
+    - role: app
+      frequency_mhz: 124.85
+      label: BONN RADAR
+    - role: twr
+      frequency_mhz: 126.20
+    - role: gnd
+      frequency_mhz: 135.10
+    - role: emergency
+      frequency_mhz: 121.50
+
+msa:
+  center_navaid_id: SPA
+  radius_nm: 25
+  bearing_reference: magnetic_inbound
+  sectors:
+    - start_bearing_deg: 0
+      end_bearing_deg: 90
+      altitude_ft: 4500
+    - start_bearing_deg: 90
+      end_bearing_deg: 180
+      altitude_ft: 3800
+    - start_bearing_deg: 180
+      end_bearing_deg: 270
+      altitude_ft: 3500
+    - start_bearing_deg: 270
+      end_bearing_deg: 360
+      altitude_ft: 5500
+
+transitions:
+  - name: IAFE
+    type: approach_transition
+    legs:
+      # Start at the 15 DME IAF on R-090. Crossing altitude 5000 ft.
+      - terminator: IF
+        transition_type: approach_transition
+        to_fix_id: IAFE
+        altitude_constraint:
+          altitude_description: at_or_above
+          altitude_1_ft: 5000
+      # Inbound 270° to the arc-entry point on the 10 DME ring. 5 NM.
+      - terminator: CF
+        transition_type: approach_transition
+        from_fix_id: IAFE
+        to_fix_id: ARC1E
+        course_deg: 270
+        altitude_constraint:
+          altitude_description: at_or_above
+          altitude_1_ft: 4000
+
+common_legs:
+  # Re-anchor at ARC1E so any ambiguity in the prior transition state
+  # is cleared: this is where every approach must meet up before the
+  # overfly.
+  - terminator: IF
+    transition_type: common
+    to_fix_id: ARC1E
+    altitude_constraint:
+      altitude_description: at
+      altitude_1_ft: 4000
+  # Overfly the field on a 270° track (≈45° off the RWY 23 reciprocal
+  # of 227°, consistent with the author's intent of a 45°-offset
+  # crossing). Exits at ARC1W, still on the 10 DME ring.
+  - terminator: CF
+    transition_type: common
+    from_fix_id: ARC1E
+    to_fix_id: ARC1W
+    course_deg: 270
+    altitude_constraint:
+      altitude_description: at
+      altitude_1_ft: 3500
+    speed_constraint:
+      speed_limit_kt: 185
+      speed_limit_description: at_or_below
+  # 10 DME arc, counterclockwise (left turn) from ARC1W through the
+  # south to AR05 on R-227. ~43° sweep; the "circle to land" segment.
+  - terminator: AF
+    transition_type: common
+    from_fix_id: ARC1W
+    to_fix_id: AR05
+    arc_center_fix_id: SPA
+    arc_radius_nm: 10.0
+    turn_direction: left
+    altitude_constraint:
+      altitude_description: at_or_above
+      altitude_1_ft: 3000
+  # Final approach course intercept — CF inbound 047° from the arc exit
+  # to the FAF at 5 DME on R-227. Glidepath-intercept altitude 3000 ft.
+  - terminator: CF
+    transition_type: common
+    from_fix_id: AR05
+    to_fix_id: ED05F
+    course_deg: 47
+    altitude_constraint:
+      altitude_description: glide_slope_altitude
+      altitude_1_ft: 3000
+    speed_constraint:
+      speed_limit_kt: 160
+      speed_limit_description: at_or_below
+  # Final descent on the 3.0° glidepath to the RWY 05 threshold.
+  - terminator: CF
+    transition_type: common
+    from_fix_id: ED05F
+    to_fix_id: RW05
+    course_deg: 47
+    vertical_angle_deg: 3.0
+    altitude_constraint:
+      altitude_description: at
+      altitude_1_ft: 1196
+
+missed_approach:
+  text_description: Climb to 3000 on runway heading 047, then direct ARC1N and hold inbound 182, right turns, 1 min legs.
+  icon_sequence: [climb, direct, hold]
+  legs:
+    - terminator: CA
+      transition_type: missed_approach
+      from_fix_id: RW05
+      course_deg: 47
+      altitude_constraint:
+        altitude_description: at_or_above
+        altitude_1_ft: 3000
+    - terminator: DF
+      transition_type: missed_approach
+      to_fix_id: ARC1N
+      turn_direction: left
+      altitude_constraint:
+        altitude_description: at
+        altitude_1_ft: 3000
+    - terminator: HM
+      transition_type: missed_approach
+      to_fix_id: ARC1N
+      hold:
+        inbound_course_deg: 182
+        turn_direction: right
+        leg_time_sec: 60
+
+minima:
+  - variant: s_vor_dme
+    category: A
+    mda_ft_msl: 1620
+    mdh_ft_agl: 424
+    visibility_sm: 1.00
+  - variant: s_vor_dme
+    category: B
+    mda_ft_msl: 1620
+    mdh_ft_agl: 424
+    visibility_sm: 1.00
+  - variant: s_vor_dme
+    category: C
+    mda_ft_msl: 1620
+    mdh_ft_agl: 424
+    visibility_sm: 1.25
+  - variant: s_vor_dme
+    category: D
+    mda_ft_msl: 1620
+    mdh_ft_agl: 424
+    visibility_sm: 1.50
+  - variant: circling
+    category: A
+    mda_ft_msl: 1700
+    mdh_ft_agl: 500
+    visibility_sm: 1.00
+  - variant: circling
+    category: B
+    mda_ft_msl: 1700
+    mdh_ft_agl: 500
+    visibility_sm: 1.00
+  - variant: circling
+    category: C
+    mda_ft_msl: 1900
+    mdh_ft_agl: 700
+    visibility_sm: 1.50
+  - variant: circling
+    category: D
+    mda_ft_msl: 1900
+    mdh_ft_agl: 700
+    visibility_sm: 2.00
+
+runways:
+  - ident_low_end: "05"
+    ident_high_end: "23"
+    low_threshold_lat_lon: { lat: 49.958, lon: 6.671 }
+    high_threshold_lat_lon: { lat: 49.988, lon: 6.713 }
+    length_ft: 10000
+    width_ft: 150
+    surface: asphalt
+    tdze_low_ft: 1196
+    tdze_high_ft: 1196
+    magnetic_bearing_low_end_deg: 45
+    lighting: [HIRL, PAPI, MALSR]
