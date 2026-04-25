@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+dist/
+build/
+out/
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+data/cache/
+data/basemap/*
+!data/basemap/regions.json
+.task/
