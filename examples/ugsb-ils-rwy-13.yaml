@@ -15,8 +15,8 @@ mag_variation_deg: 6.0
 mag_variation_year: 2026
 reference_datum: WGS84
 
-tdze_ft_msl: 32
-airport_elev_ft_msl: 32
+tdze_ft_msl: 85
+airport_elev_ft_msl: 105
 runway_ident: "13"
 
 basemap:
@@ -37,45 +37,45 @@ fixes:
     type: navaid
     name: BATUMI LOC
     navaid_type: loc
-    lat: 41.6499
-    lon: 41.6432
+    lat: 41.6015
+    lon: 41.6130
     frequency_mhz: 110.30
-    bearing_true_deg: 121.0
+    bearing_true_deg: 130.8
 
   - id: BLACK
     type: named_fix
     name: BLACK
-    lat: 41.9000
-    lon: 41.2000
+    lat: 41.8256
+    lon: 41.2158
     elevation_ft: 0
 
   - id: KOBUL
     type: named_fix
     name: KOBUL
-    lat: 41.7600
-    lon: 41.4500
+    lat: 41.7140
+    lon: 41.4382
 
   - id: BT13F
     type: named_fix
     name: BT13F
-    lat: 41.6850
-    lon: 41.5650
+    lat: 41.6706
+    lon: 41.5058
 
   - id: RW13
     type: runway_threshold
     name: RWY 13 THRESHOLD
-    lat: 41.6499
-    lon: 41.6432
-    elevation_ft: 32
+    lat: 41.6162
+    lon: 41.5902
+    elevation_ft: 85
 
   - id: BTMAP
     type: named_fix
     name: BTMAP
-    lat: 41.6200
-    lon: 41.6750
+    lat: 41.5944
+    lon: 41.6239
 
 briefing_strip:
-  final_approach_course_deg: 127
+  final_approach_course_deg: 125
   gs_intercept_altitude_ft: 2500
   gs_angle_deg: 3.0
   transition_altitude_ft: 10000
@@ -148,7 +148,7 @@ common_legs:
     transition_type: common
     from_fix_id: KOBUL
     to_fix_id: BT13F
-    course_deg: 127
+    course_deg: 125
     altitude_constraint:
       altitude_description: glide_slope_altitude
       altitude_1_ft: 2500
@@ -159,11 +159,11 @@ common_legs:
     transition_type: common
     from_fix_id: BT13F
     to_fix_id: RW13
-    course_deg: 127
+    course_deg: 125
     vertical_angle_deg: 3.0
     altitude_constraint:
       altitude_description: at
-      altitude_1_ft: 32
+      altitude_1_ft: 85
 
 missed_approach:
   text_description: Climb to 2000 then climbing right turn to 4000 direct BTM VOR and hold.
@@ -172,7 +172,7 @@ missed_approach:
     - terminator: CA
       transition_type: missed_approach
       from_fix_id: RW13
-      course_deg: 127
+      course_deg: 125
       altitude_constraint:
         altitude_description: at_or_above
         altitude_1_ft: 2000
@@ -187,7 +187,7 @@ missed_approach:
       transition_type: missed_approach
       to_fix_id: BTM
       hold:
-        inbound_course_deg: 307
+        inbound_course_deg: 305
         turn_direction: right
         leg_time_sec: 60
 
@@ -241,12 +241,12 @@ minima:
 runways:
   - ident_low_end: "13"
     ident_high_end: "31"
-    low_threshold_lat_lon: { lat: 41.6499, lon: 41.6432 }
-    high_threshold_lat_lon: { lat: 41.6102, lon: 41.5997 }
-    length_ft: 8858
+    low_threshold_lat_lon: { lat: 41.6162, lon: 41.5902 }
+    high_threshold_lat_lon: { lat: 41.6015, lon: 41.6130 }
+    length_ft: 8202
     width_ft: 148
     surface: asphalt
-    tdze_low_ft: 32
-    tdze_high_ft: 32
-    magnetic_bearing_low_end_deg: 127
+    tdze_low_ft: 85
+    tdze_high_ft: 105
+    magnetic_bearing_low_end_deg: 125
     lighting: [HIRL, PAPI, MALSR]

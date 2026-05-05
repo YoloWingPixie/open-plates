@@ -10,10 +10,11 @@ Runs, in order:
  1. ``build_basemap_hillshade``   (SRTM DEM fetch + hillshade PNG — slowest,
     does the big network + CPU work first so a failed OSM retry later
     doesn't throw out the expensive terrain pass)
- 2. ``build_basemap_populated``   (Overpass: admin polygons)
- 3. ``build_basemap_roads``       (Overpass: highway ways)
- 4. ``build_basemap_waterways``   (Overpass: rivers + lakes)
- 5. ``build_basemap_obstacles``   (Overpass: tall structures)
+ 2. ``build_basemap_coastline``   (Overpass: coastline ways + sea fill)
+ 3. ``build_basemap_populated``   (Overpass: admin polygons)
+ 4. ``build_basemap_roads``       (Overpass: highway ways)
+ 5. ``build_basemap_waterways``   (Overpass: rivers + lakes)
+ 6. ``build_basemap_obstacles``   (Overpass: tall structures)
 
 All five builders read their bbox from ``data/basemap/regions.json``.
 If the region id isn't registered this script fails fast without touching
@@ -34,6 +35,7 @@ from pathlib import Path
 # Import each builder module so we can call its ``build(...)`` entry
 # point directly — keeps stdout streaming and avoids the subprocess
 # overhead of shelling out five times.
+from build_basemap_coastline import build as build_coastline
 from build_basemap_hillshade import build as build_hillshade
 from build_basemap_obstacles import build as build_obstacles
 from build_basemap_populated import build as build_populated
@@ -81,6 +83,7 @@ def load_region_bbox(region_id: str) -> tuple[float, float, float, float]:
 # raises on hard failure.
 STEPS: tuple[tuple[str, object], ...] = (
     ("hillshade", build_hillshade),
+    ("coastline", build_coastline),
     ("populated", build_populated),
     ("roads", build_roads),
     ("waterways", build_waterways),
@@ -118,7 +121,7 @@ def main(argv: list[str]) -> int:
         print(f"--- step {name!r} done in {dt:.1f}s ---", flush=True)
     total_dt = time.perf_counter() - total_t0
     print(
-        f"\n=== all 5 layers built for {args.region_id!r} "
+        f"\n=== all {len(STEPS)} layers built for {args.region_id!r} "
         f"in {total_dt:.1f}s ===",
         flush=True,
     )

@@ -350,9 +350,9 @@ def load_basemap(
 ) -> dict | None:
     """Load a basemap GeoJSON for ``region``; return ``None`` if missing.
 
-    Also merges any sibling ``<region>-populated.json`` and
-    ``<region>-obstacles.json`` files found alongside the base file. Each
-    sibling's ``features`` array is concatenated onto the base collection's.
+    Also merges any sibling generated layer files found alongside the base
+    file. Each sibling's ``features`` array is concatenated onto the base
+    collection's.
     If no base file exists, returns ``None`` even if siblings are present
     (the base file declares the region; siblings are additive layers).
 
@@ -377,13 +377,22 @@ def load_basemap(
     base_features = list(base.get("features") or [])
     merged_sources: list[str] = []
     sibling_bboxes: list[tuple[str, tuple[float, float, float, float]]] = []
-    for suffix in ("populated", "obstacles", "roads", "waterways"):
+    for suffix in ("coastline", "populated", "obstacles", "roads", "waterways"):
         sib = _sibling_path(p, suffix)
         if not sib.is_file():
             continue
         with sib.open("r", encoding="utf-8") as fh:
             sib_doc = json.load(fh)
         sib_features = sib_doc.get("features") or []
+        if suffix == "coastline":
+            # The checked-in region files are intentionally coarse context
+            # sketches. If a generated coastline/sea sidecar exists, it is
+            # authoritative for shoreline placement; keep the base file for
+            # cities/roads fallback, but drop its gestural water geometry.
+            base_features = [
+                f for f in base_features
+                if _feature_class(f) not in {"sea", "coast"}
+            ]
         base_features.extend(sib_features)
         merged_sources.append(suffix)
         sb = _sibling_bbox_geographic(sib_doc, suffix)
@@ -507,9 +516,26 @@ def _submit_basemap_label(
             f'<text {common} fill="{fill}">{_esc(text)}</text>\n'
         )
 
+    add_label = getattr(ctx, "add_label_request", None)
+    if add_label is not None:
+        add_label(
+            feature_id=feature_id,
+            anchor=anchor,
+            content_size=(w, h),
+            candidates=candidates,
+            fallback="suppress",
+            clearance=1.0,
+            render=_render,
+            tier=PlacementTier.CULTURE,
+            paint_layer="basemap",
+            mask_role="basemap",
+        )
+        return
+
+    # Back-compat for any caller duck-typing the old minimal context.
     ctx.requests.append(
         PlacementRequest(
-            tier=PlacementTier.LABEL if family_mono else PlacementTier.CULTURE,
+            tier=PlacementTier.CULTURE,
             anchor=anchor,
             content_size=(w, h),
             candidates=candidates,
@@ -1348,6 +1374,7 @@ def render_basemap(
     line_mask_id: str | None = None,
     plan_rect: tuple[float, float, float, float] | None = None,
     placement_ctx: object | None = None,
+    deferred_label_token: str | None = None,
 ) -> str:
     """Render a basemap GeoJSON to an SVG fragment.
 
@@ -1520,6 +1547,8 @@ def render_basemap(
         mask_attr = (
             f' mask="url(#{line_mask_id})"' if line_mask_id else ""
         )
+        if deferred_label_token:
+            lines_body += deferred_label_token
         inner += (
             f'<g data-layer="basemap-lines"{mask_attr}>\n{lines_body}</g>\n'
         )

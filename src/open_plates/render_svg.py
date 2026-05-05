@@ -603,6 +603,7 @@ _MASK_BBOX_PAD = 2.0
 # render_basemap accepts this via its ``line_mask_id`` parameter; both must
 # agree for the browser/cairosvg to resolve the reference.
 _PLAN_MASK_ID = "planProcedureMask"
+_BASEMAP_LABEL_TOKEN = "<!--OPEN_PLATES_BASEMAP_LABELS-->\n"
 
 
 def _collect_procedure_bboxes(
@@ -743,11 +744,7 @@ def _collect_procedure_bboxes(
         nx, ny = _pick_notes_corner(
             procedure, fixes, primitives, projector, region,
         )
-        # _render_plan_notes anchors the bottom edge of the box at
-        # (ny + 60) - 10. Approximate the box height at ~60 px (matches
-        # the nominal value used by _pick_notes_corner's scorer).
-        nbox_w = 220.0
-        nbox_h = 60.0
+        nbox_w, nbox_h = _notes_box_dims(procedure)
         box_bottom = (ny + 60.0) - 10.0
         box_top = box_bottom - nbox_h
         _add(nx, box_top, nbox_w, nbox_h)
@@ -832,7 +829,7 @@ def _render_plan_view(
         bm_decl = procedure.get("basemap") or None
         if bm_decl is True:
             bm_decl = {}
-        basemap_label_requests: list = []
+        basemap_svg = ""
         if isinstance(bm_decl, dict):
             region_id = bm_decl.get("region")
             # Pass the geographic extent the projector fits to so
@@ -852,40 +849,47 @@ def _render_plan_view(
                 )
             if geojson is not None:
                 cfg = BasemapConfig.from_mapping(bm_decl)
-                bboxes = _collect_procedure_bboxes(
-                    procedure, fixes, primitives, projector, (x, y, w, h),
-                )
-                out += _render_procedure_mask_defs(
-                    _PLAN_MASK_ID, (x, y, w, h), bboxes,
-                )
-                out += render_basemap(
+                basemap_svg = render_basemap(
                     geojson, cfg, projector,
                     line_mask_id=_PLAN_MASK_ID,
                     plan_rect=(x, y, x + w, y + h),
                     placement_ctx=ctx,
+                    deferred_label_token=_BASEMAP_LABEL_TOKEN,
                 )
 
         # Runways (drawn first, under everything else).
-        out += _render_runways(procedure, projector)
+        overlay_svg = _render_runways(procedure, projector)
 
         # LOC feather drawn AFTER procedure primitives so its outlines sit
         # on top of the magenta casing (otherwise the paper-halo casing
         # masks the feather on straight-in ILS approaches where the
         # feather and inbound procedure course coincide).
-        out += _render_primitives(primitives, projector, procedure)
-        out += _render_localizer_ribbon(procedure, projector)
-        out += _render_fix_symbols(
+        overlay_svg += _render_primitives(primitives, projector, procedure)
+        overlay_svg += _render_localizer_ribbon(procedure, projector)
+        overlay_svg += _render_fix_symbols(
             procedure, fixes, primitives, projector,
             engine=ctx.engine, plan_rect=plan_box,
         )
 
         # Scale bar + north arrow (cyan reference overlays).
-        out += _render_scale_bar(projector, fixes, region)
-        out += _render_north_arrow(procedure, region)
+        overlay_svg += _render_scale_bar(projector, fixes, region)
+        overlay_svg += _render_north_arrow(procedure, region)
 
-        # Resolve every label request collected so far and emit SVG.
-        # This is the single engine.place() call for the plan view.
-        out += ctx.resolve_and_emit()
+        # Resolve every label request collected so far. Basemap labels
+        # paint inside the basemap group; procedure labels paint above
+        # procedure geometry. The mask is now derived from the actual
+        # placed procedure labels + fixed overlay reservations instead
+        # of legacy pre-placement guesses.
+        ctx.resolve()
+        if basemap_svg:
+            out += _render_procedure_mask_defs(
+                _PLAN_MASK_ID, (x, y, w, h), ctx.mask_bboxes("procedure"),
+            )
+            out += basemap_svg.replace(
+                _BASEMAP_LABEL_TOKEN, ctx.emit_layer("basemap"),
+            )
+        out += overlay_svg
+        out += ctx.emit_layer("procedure")
 
         out += "</g>\n"
 
@@ -1001,8 +1005,7 @@ def _register_plan_geometry(
         nx, ny = _pick_notes_corner(
             procedure, fixes, primitives, projector, region,
         )
-        nbox_w = 220.0
-        nbox_h = 60.0
+        nbox_w, nbox_h = _notes_box_dims(procedure)
         box_bottom = (ny + 60.0) - 10.0
         box_top = box_bottom - nbox_h
         ctx.add_fixed(
@@ -1157,7 +1160,6 @@ def _pick_notes_corner(
                        {"sw": 0, "nw": 1, "se": 2, "ne": 3}[c[0]]),
     )
     chosen = ranked[0]
-    print(f"  notes-corner chosen: {chosen[0]}")
     # _render_plan_notes expects the anchor (x, y_top_candidate) where
     # the box's bottom sits 10 px above y+60. Re-derive its y parameter
     # so that the box BOTTOM lands at the corner-bottom we scored.
@@ -1181,8 +1183,6 @@ def _render_plan_notes(procedure: dict, x: float, y: float) -> str:
     notes = brief.get("notes") or []
     if not notes:
         return ""
-    # Widened to 220 px (still < 40 % of plan-view width 576 px) to give
-    # wrapped text more room before truncation kicks in.
     box_w = 147.0
     pad = 3.5
     line_h = 7.0
@@ -1227,15 +1227,12 @@ def _render_plan_notes(procedure: dict, x: float, y: float) -> str:
 
 
 def _render_localizer_ribbon(procedure: dict, projector: Projector) -> str:
-    """Jeppesen-style LOC feather — three thin lines diverging slightly
-    outward from the runway threshold back along the reciprocal of the
-    final approach course, plus perpendicular DME tick marks on the
-    centerline at 2 NM intervals.
+    """Jeppesen-style LOC feather.
 
-    Draws the LOC centerline and two edge lines at +/-1.5 deg of
-    divergence from the course, each 8 NM long. Solid thin strokes, no
-    hatching, no fill. Reads clearly at plate scale because the feather
-    is literally three thin straight lines plus four ticks.
+    Draws the localizer as a Jeppesen-style front-course feather: a
+    tapered symbol that starts at a sharp point, widens along the course,
+    carries a center divider, has diagonal hatching in one half, and ends
+    with the characteristic wide chevron/forked cap.
 
     Only emitted for ILS / LOC approaches. VOR/NDB/RNAV circling
     approaches without a localizer return an empty string.
@@ -1269,35 +1266,29 @@ def _render_localizer_ribbon(procedure: dict, projector: Projector) -> str:
     thresh_ll = fixes_tbl[thresh_fix_id]
     course_deg = initial_bearing_deg(fixes_tbl[source_fix_id], thresh_ll)
 
-    # Standard LOC feather is 8 NM -- matches published LOC service
-    # volume. Edges diverge at +/-3.0 deg from the centerline (~0.84 NM
-    # half-width at 8 NM). This is VISUALLY EXAGGERATED from the real
-    # ILS localizer sensitivity cone (~+/-1.5 deg) for plate-scale
-    # readability — same cosmetic principle as the 8 px minimum runway
-    # width: actual geometry would read as a hairline sliver against
-    # the procedure casing and lose its distinct three-line silhouette.
-    LENGTH_NM = 8.0
-    EDGE_DIVERGENCE_DEG = 3.0
+    LENGTH_NM = 8.5
     TICK_INTERVAL_NM = 2.0
-    TICK_LEN_PX = 3.0
-    STROKE_W = 0.5
+    TICK_LEN_PX = 6.0
+    CENTER_SW = 0.6
+    EDGE_SW = 0.9
+    HATCH_SW = 0.45
+    HALF_WIDTH_PX = 7.5
+    FAR_EXT_PX = 12.0
+    END_NOTCH_PX = 11.0
+    HATCH_SPACING_PX = 6.5
 
     recip = (float(course_deg) + 180.0) % 360.0
-    # Three endpoints: centerline straight back, upper/lower edges diverged.
     center_far = destination(thresh_ll, recip, LENGTH_NM)
-    upper_far = destination(thresh_ll, (recip + EDGE_DIVERGENCE_DEG) % 360.0, LENGTH_NM)
-    lower_far = destination(thresh_ll, (recip - EDGE_DIVERGENCE_DEG + 360.0) % 360.0, LENGTH_NM)
 
     a = projector(thresh_ll)
     c = projector(center_far)
-    u = projector(upper_far)
-    l = projector(lower_far)
 
-    frag = ""
-    # Three thin solid lines: upper edge, centerline, lower edge.
-    frag += _line(a[0], a[1], u[0], u[1], stroke=COLOR_INK, sw=STROKE_W)
-    frag += _line(a[0], a[1], c[0], c[1], stroke=COLOR_INK, sw=STROKE_W)
-    frag += _line(a[0], a[1], l[0], l[1], stroke=COLOR_INK, sw=STROKE_W)
+    def _ink_line(
+        p0: tuple[float, float],
+        p1: tuple[float, float],
+        sw: float,
+    ) -> str:
+        return _line(p0[0], p0[1], p1[0], p1[1], stroke=COLOR_INK, sw=sw)
 
     # Perpendicular tick marks on the centerline at integer DME values
     # (2, 4, 6, 8 NM from the threshold). Classic LOC DME tick markers;
@@ -1307,10 +1298,57 @@ def _render_localizer_ribbon(procedure: dict, projector: Projector) -> str:
     cvx = c[0] - a[0]
     cvy = c[1] - a[1]
     cvl = hypot(cvx, cvy)
+    frag = ""
     if cvl > 0:
+        ux = cvx / cvl
+        uy = cvy / cvl
         # Unit perpendicular vector in screen space.
         px = -cvy / cvl
         py = cvx / cvl
+
+        point = a
+        far_left = (
+            c[0] + ux * FAR_EXT_PX + px * HALF_WIDTH_PX,
+            c[1] + uy * FAR_EXT_PX + py * HALF_WIDTH_PX,
+        )
+        far_right = (
+            c[0] + ux * FAR_EXT_PX - px * HALF_WIDTH_PX,
+            c[1] + uy * FAR_EXT_PX - py * HALF_WIDTH_PX,
+        )
+        cap_notch = (
+            c[0] - ux * END_NOTCH_PX,
+            c[1] - uy * END_NOTCH_PX,
+        )
+
+        # Outer tapered edges from the sharp runway-side point.
+        frag += _ink_line(point, far_left, EDGE_SW)
+        frag += _ink_line(point, far_right, EDGE_SW)
+        # Wide end chevron/forked cap.
+        frag += _ink_line(far_left, cap_notch, EDGE_SW)
+        frag += _ink_line(cap_notch, far_right, EDGE_SW)
+        # Center divider.
+        frag += _ink_line(point, c, CENTER_SW)
+
+        # Front-course half hatching. Keep hatch marks fixed in screen
+        # space so stretching the feather length doesn't thicken or
+        # distort the symbol.
+        hatch_start = HATCH_SPACING_PX
+        hatch_end = max(cvl - END_NOTCH_PX, hatch_start)
+        d = hatch_start
+        while d <= hatch_end:
+            # Interpolate current half-width so hatch marks stay inside
+            # the tapered feather.
+            t = min(max(d / cvl, 0.0), 1.0)
+            half_at_d = HALF_WIDTH_PX * t
+            base = (a[0] + ux * d, a[1] + uy * d)
+            on_center = base
+            on_edge = (
+                base[0] + ux * FAR_EXT_PX * t + px * half_at_d,
+                base[1] + uy * FAR_EXT_PX * t + py * half_at_d,
+            )
+            frag += _ink_line(on_center, on_edge, HATCH_SW)
+            d += HATCH_SPACING_PX
+
         n_ticks = int(LENGTH_NM // TICK_INTERVAL_NM)
         for i in range(1, n_ticks + 1):
             t = (i * TICK_INTERVAL_NM) / LENGTH_NM
@@ -1320,26 +1358,30 @@ def _render_localizer_ribbon(procedure: dict, projector: Projector) -> str:
             y0 = ty - py * TICK_LEN_PX
             x1 = tx + px * TICK_LEN_PX
             y1 = ty + py * TICK_LEN_PX
-            frag += _line(x0, y0, x1, y1, stroke=COLOR_INK, sw=STROKE_W)
+            frag += _ink_line((x0, y0), (x1, y1), CENTER_SW * 0.85)
     return frag
 
 
 def _render_runways(procedure: dict, projector: Projector) -> str:
-    """Draw runways as pavement polygons with dashed centerline extensions.
+    """Draw runways as high-contrast chart symbols.
 
     Overlapping runways (e.g. LSZH's three crossing strips) are merged
     into a single outline via polygon union so there are no interior
     stroke lines at intersections. Non-overlapping runways keep their
-    own outlines.
+    own outlines. The visual treatment is intentionally closer to IAP
+    symbology than to basemap pavement: black runway mass, paper casing,
+    and paper centerlines so airport geometry is always legible above
+    terrain/roads.
     """
     from shapely.geometry import Polygon as ShapelyPolygon
     from shapely.ops import unary_union
 
     FT_PER_NM = 6076.12
     DEFAULT_WIDTH_FT = 150.0
-    MIN_RUNWAY_WIDTH_PX = 3.5
+    MIN_RUNWAY_WIDTH_PX = 8.0
     CENTERLINE_EXT_NM = 1.0
-    PAVEMENT_FILL = "#E8E4DA"
+    RUNWAY_CASING_EXTRA_PX = 2.0
+    RUNWAY_STROKE_W = 1.0
 
     runways = list(procedure.get("runways") or [])
     runways.sort(key=lambda rw: (
@@ -1349,6 +1391,8 @@ def _render_runways(procedure: dict, projector: Projector) -> str:
 
     shapely_polys: list[ShapelyPolygon] = []
     centerline_frags: list[str] = []
+    runway_centerline_frags: list[str] = []
+    threshold_bar_frags: list[str] = []
 
     for rw in runways:
         low = rw.get("low_threshold_lat_lon") or {}
@@ -1386,12 +1430,28 @@ def _render_runways(procedure: dict, projector: Projector) -> str:
         high_ext = (b[0] + ux * ext_px, b[1] + uy * ext_px)
         centerline_frags.append(
             _line(low_ext[0], low_ext[1], a[0], a[1],
-                  stroke=COLOR_INK, sw=0.4, dash="3 2")
+                  stroke=COLOR_INK, sw=0.8, dash="4 2")
         )
         centerline_frags.append(
             _line(b[0], b[1], high_ext[0], high_ext[1],
-                  stroke=COLOR_INK, sw=0.4, dash="3 2")
+                  stroke=COLOR_INK, sw=0.8, dash="4 2")
         )
+        runway_centerline_frags.append(
+            _line(a[0], a[1], b[0], b[1], stroke=COLOR_PAPER, sw=0.9)
+        )
+
+        bar_half = max(half - 0.8, 2.5)
+        for pt in (a, b):
+            threshold_bar_frags.append(
+                _line(
+                    pt[0] - perp_x * bar_half,
+                    pt[1] - perp_y * bar_half,
+                    pt[0] + perp_x * bar_half,
+                    pt[1] + perp_y * bar_half,
+                    stroke=COLOR_PAPER,
+                    sw=0.8,
+                )
+            )
 
     if not shapely_polys:
         return ""
@@ -1400,21 +1460,28 @@ def _render_runways(procedure: dict, projector: Projector) -> str:
 
     frag = ""
 
-    def _emit_polygon(geom) -> str:
+    def _emit_polygon(geom, *, fill: str, stroke: str, sw: float) -> str:
         xs, ys = geom.exterior.coords.xy
         pts = " ".join(f"{_fmt(x)},{_fmt(y)}" for x, y in zip(xs, ys))
         return (
             f'<polygon points="{pts}" '
-            f'fill="{PAVEMENT_FILL}" stroke="{COLOR_INK}" '
-            f'stroke-width="0.75" stroke-linejoin="miter"/>\n'
+            f'fill="{fill}" stroke="{stroke}" '
+            f'stroke-width="{_fmt(sw)}" stroke-linejoin="miter"/>\n'
         )
 
-    if merged.geom_type == "Polygon":
-        frag += _emit_polygon(merged)
-    elif merged.geom_type == "MultiPolygon":
-        for poly in merged.geoms:
-            frag += _emit_polygon(poly)
+    merged_geoms = [merged] if merged.geom_type == "Polygon" else list(merged.geoms)
+    for poly in merged_geoms:
+        buffered = poly.buffer(RUNWAY_CASING_EXTRA_PX, join_style=2)
+        frag += _emit_polygon(
+            buffered, fill=COLOR_PAPER, stroke=COLOR_PAPER, sw=0.0,
+        )
+    for poly in merged_geoms:
+        frag += _emit_polygon(
+            poly, fill=COLOR_INK, stroke=COLOR_INK, sw=RUNWAY_STROKE_W,
+        )
 
+    frag += "".join(runway_centerline_frags)
+    frag += "".join(threshold_bar_frags)
     frag += "".join(centerline_frags)
 
     return frag
@@ -2007,12 +2074,16 @@ def _course_label_renderer(course: float, angle_deg: float, mono_inline: str):
         # Centre the text inside the bbox.
         cx = placed.bbox.x + placed.bbox.w / 2.0
         cy = placed.bbox.y + placed.bbox.h / 2.0 + 3.0  # baseline nudge
-        return (
-            f'<text x="{_fmt(cx)}" y="{_fmt(cy)}" text-anchor="middle" '
-            f'fill="{COLOR_INK}" style="font-size:{_fmt(SIZE_BODY)}px;font-weight:bold;'
+        label_common = (
+            f'x="{_fmt(cx)}" y="{_fmt(cy)}" text-anchor="middle" '
+            f'style="font-size:{_fmt(SIZE_BODY)}px;font-weight:bold;'
             f'font-family:{mono_inline}" '
-            f'transform="rotate({_fmt(angle_deg)} {_fmt(cx)} {_fmt(cy)})">'
-            f"{_esc(txt)}</text>\n"
+            f'transform="rotate({_fmt(angle_deg)} {_fmt(cx)} {_fmt(cy)})"'
+        )
+        return (
+            f'<text {label_common} fill="none" stroke="{COLOR_PAPER}" '
+            f'stroke-width="1.6" stroke-linejoin="round">{_esc(txt)}</text>\n'
+            f'<text {label_common} fill="{COLOR_INK}">{_esc(txt)}</text>\n'
         )
     return _render
 
@@ -2032,9 +2103,38 @@ def _collect_course_label_requests(
     """
     seen: set[tuple[str, str]] = set()
     mono_inline = FONT_MONO.replace('"', "'")
+    subtype = (procedure.get("approach_subtype") or "").lower()
+    localizer_like = subtype in (
+        "ils", "loc", "ils_dme", "loc_dme", "ils_cat1", "ils_cat2", "ils_cat3",
+    )
+    fixes_by_id = {f.get("id"): f for f in (procedure.get("fixes") or [])}
+    final_loc_course: float | None = None
+    final_loc_from_id: str | None = None
+    final_loc_to_id: str | None = None
+    if localizer_like:
+        for leg in reversed(procedure.get("common_legs") or []):
+            to_id = leg.get("to_fix_id")
+            if fixes_by_id.get(to_id, {}).get("type") == "runway_threshold":
+                course = leg.get("course_deg")
+                if course is not None:
+                    final_loc_course = float(course)
+                    final_loc_from_id = leg.get("from_fix_id")
+                    final_loc_to_id = to_id
+                break
 
     def _emit(from_id: str | None, to_id: str | None, course):
         if not (from_id and to_id and course is not None):
+            return
+        if (
+            localizer_like
+            and final_loc_course is not None
+            and abs(float(course) - final_loc_course) < 0.5
+            and to_id != final_loc_to_id
+        ):
+            # Do not label every collinear CF on the localizer. The
+            # final course label belongs once, outside the LOC feather,
+            # otherwise same-course intermediate labels land inside the
+            # hatch pattern and become illegible.
             return
         key = (from_id, to_id)
         if key in seen or from_id not in fixes or to_id not in fixes:
@@ -2042,37 +2142,81 @@ def _collect_course_label_requests(
         seen.add(key)
         a = projector(fixes[from_id])
         b = projector(fixes[to_id])
-        mx = (a[0] + b[0]) / 2.0
-        my = (a[1] + b[1]) / 2.0
         dx, dy = b[0] - a[0], b[1] - a[1]
         length = (dx * dx + dy * dy) ** 0.5 or 1.0
-        # Left-hand perpendicular offset of the anchor (matches legacy
-        # default position, just expressed as an anchor + zero-offset
-        # candidate so the engine can nudge it perpendicular-right when
-        # the preferred side is blocked).
-        ox = -dy / length * 9.0
-        oy = dx / length * 9.0
-        anchor = (mx + ox, my + oy)
         angle = degrees(atan2(dy, dx))
         if angle > 90 or angle < -90:
             angle += 180
         txt = f"{int(round(course)):03d}\u00B0"
         w = len(txt) * SIZE_BODY * 0.62
         h = SIZE_BODY * 1.25
-        # 4-position offset candidates — keep the label hugging the leg
-        # so the engine can swap to the opposite side if the preferred
-        # one collides.
-        candidates = (
-            LabelCandidate(-w / 2.0, -h / 2.0, weight=0),  # at anchor (preferred)
-            LabelCandidate(-w / 2.0 - 2 * ox, -h / 2.0 - 2 * oy, weight=1),  # flip side
+
+        is_final_loc = (
+            localizer_like
+            and from_id == final_loc_from_id
+            and to_id == final_loc_to_id
+            and fixes_by_id.get(to_id, {}).get("type") == "runway_threshold"
         )
+        if is_final_loc:
+            # The final course number belongs just beyond the LOC feather
+            # tail, not beside the runway-to-FAF segment midpoint. Anchor
+            # it from the same threshold -> feather-tail geometry used by
+            # ``_render_localizer_ribbon`` so it cannot drift laterally.
+            from .geodesy import initial_bearing_deg
+
+            final_bearing = initial_bearing_deg(fixes[from_id], fixes[to_id])
+            feather_far_ll = destination(fixes[to_id], (final_bearing + 180.0) % 360.0, 8.5)
+            threshold_xy = projector(fixes[to_id])
+            feather_far_xy = projector(feather_far_ll)
+            fdx = feather_far_xy[0] - threshold_xy[0]
+            fdy = feather_far_xy[1] - threshold_xy[1]
+            flen = (fdx * fdx + fdy * fdy) ** 0.5 or 1.0
+            ux = fdx / flen
+            uy = fdy / flen
+            tail_ext_px = 12.0
+            label_gap_px = 3.0
+            tail = (
+                feather_far_xy[0] + ux * tail_ext_px,
+                feather_far_xy[1] + uy * tail_ext_px,
+            )
+            anchor = tail
+            candidates = tuple(
+                LabelCandidate(
+                    ux * (label_gap_px + w / 2.0 + extra_px) - w / 2.0,
+                    uy * (label_gap_px + w / 2.0 + extra_px) - h / 2.0,
+                    weight=rank,
+                )
+                for rank, extra_px in enumerate((0.0, 10.0, 22.0, 36.0))
+            )
+            fallback = "suppress"
+            clearance = 0.0
+        else:
+            mx = (a[0] + b[0]) / 2.0
+            my = (a[1] + b[1]) / 2.0
+            # Left-hand perpendicular offset of the anchor (matches
+            # legacy default position, just expressed as an anchor +
+            # zero-offset candidate so the engine can nudge it
+            # perpendicular-right when the preferred side is blocked).
+            label_offset_px = 9.0
+            ox = -dy / length * label_offset_px
+            oy = dx / length * label_offset_px
+            anchor = (mx + ox, my + oy)
+            # 4-position offset candidates — keep the label hugging the
+            # leg so the engine can swap to the opposite side if the
+            # preferred one collides.
+            candidates = (
+                LabelCandidate(-w / 2.0, -h / 2.0, weight=0),
+                LabelCandidate(-w / 2.0 - 2 * ox, -h / 2.0 - 2 * oy, weight=1),
+            )
+            fallback = "displace"
+            clearance = 1.0
         ctx.add_label_request(
             feature_id=f"course:{from_id}->{to_id}",
             anchor=anchor,
             content_size=(w, h),
             candidates=candidates,
-            fallback="displace",
-            clearance=1.0,
+            fallback=fallback,
+            clearance=clearance,
             render=_course_label_renderer(float(course), angle, mono_inline),
         )
 
@@ -2250,6 +2394,9 @@ class _PlanLabelCtx:
         self.engine = PlacementEngine(plan_rect=plan_rect)
         self.requests: list[PlacementRequest] = []
         self.render_fns: list[object] = []
+        self.paint_layers: list[str] = []
+        self.mask_roles: list[str] = []
+        self._placed: list[Placed] | None = None
 
     @classmethod
     def current(cls) -> "_PlanLabelCtx | None":
@@ -2263,7 +2410,12 @@ class _PlanLabelCtx:
         type(self)._active = None
 
     def add_fixed(
-        self, feature_id: str, tier: PlacementTier, bbox: PBBox,
+        self,
+        feature_id: str,
+        tier: PlacementTier,
+        bbox: PBBox,
+        *,
+        mask_role: str = "procedure",
     ) -> None:
         """Register a non-label bbox reservation."""
         self.requests.append(
@@ -2279,6 +2431,9 @@ class _PlanLabelCtx:
         )
         # Parallel None entry — fixed reservations emit nothing themselves.
         self.render_fns.append(None)
+        self.paint_layers.append("fixed")
+        self.mask_roles.append(mask_role)
+        self._placed = None
 
     def add_label_request(
         self,
@@ -2291,6 +2446,8 @@ class _PlanLabelCtx:
         clearance: float,
         render,
         tier: PlacementTier = PlacementTier.LABEL,
+        paint_layer: str = "procedure",
+        mask_role: str = "procedure",
     ) -> None:
         self.requests.append(
             PlacementRequest(
@@ -2304,25 +2461,58 @@ class _PlanLabelCtx:
             )
         )
         self.render_fns.append(render)
+        self.paint_layers.append(paint_layer)
+        self.mask_roles.append(mask_role)
+        self._placed = None
 
-    def resolve_and_emit(self) -> str:
-        """Run the engine and emit SVG for every label request.
+    def resolve(self) -> list[Placed]:
+        """Run the placement engine once and cache its result.
 
         Fixed-bbox reservations emit nothing here (they were already
         drawn by their geometry layer). Stores the full Placed list on
         the module-level trace for tests to introspect.
         """
         global _LAST_PLAN_TRACE
-        placed_list = self.engine.place(self.requests)
-        _LAST_PLAN_TRACE = placed_list
+        if self._placed is None:
+            self._placed = self.engine.place(self.requests)
+            _LAST_PLAN_TRACE = self._placed
+        return self._placed
+
+    def emit_layer(self, layer: str) -> str:
+        """Emit placed labels for one paint layer."""
+        placed_list = self.resolve()
         parts: list[str] = []
-        for placed, render in zip(placed_list, self.render_fns):
+        for placed, render, paint_layer in zip(
+            placed_list, self.render_fns, self.paint_layers,
+        ):
+            if paint_layer != layer:
+                continue
             if render is None:
                 continue  # fixed bbox reservation
             if placed.bbox.w == 0 and placed.bbox.h == 0:
                 continue  # suppressed
             parts.append(render(placed))
         return "".join(parts)
+
+    def mask_bboxes(self, role: str) -> list[BBox]:
+        """Return final placed bboxes to punch from masked lower layers."""
+        out: list[BBox] = []
+        for placed, mask_role in zip(self.resolve(), self.mask_roles):
+            if mask_role != role:
+                continue
+            if placed.bbox.w == 0 or placed.bbox.h == 0:
+                continue
+            out.append((
+                placed.bbox.x - _MASK_BBOX_PAD,
+                placed.bbox.y - _MASK_BBOX_PAD,
+                placed.bbox.w + 2 * _MASK_BBOX_PAD,
+                placed.bbox.h + 2 * _MASK_BBOX_PAD,
+            ))
+        return out
+
+    def resolve_and_emit(self) -> str:
+        """Back-compat shim for tests / external callers."""
+        return self.emit_layer("procedure")
 
 
 def _plan_role_labels(
@@ -3122,19 +3312,64 @@ def _render_profile_view(procedure: dict, region: Region) -> str:
                  size=SIZE_MICRO, anchor="end", weight="bold",
                  family=FONT_MONO, fill=COLOR_MUTED, tracking=TRACK)
 
-    # DA reference — cyan overlay.
-    da = None
-    for m in procedure.get("minima") or []:
-        if m.get("variant") == "s_ils" and "da_ft_msl" in m and not m.get("not_authorized"):
-            da = m["da_ft_msl"]
+    # Minima reference. Chart profiles mark where the descent path reaches
+    # DA/DH or MDA/MDH with a vertical dashed reference, not a horizontal
+    # rule. Prefer straight-in DA rows; fall back to MDA rows. Use DH/MDH
+    # when present because the profile's baseline is the runway/TDZE, and
+    # fall back to MSL-minus-TDZE when only DA/MDA is published.
+    minima_ref = None
+    authorized_minima = [
+        m for m in (procedure.get("minima") or [])
+        if not m.get("not_authorized")
+    ]
+    straight_in = [
+        m for m in authorized_minima
+        if str(m.get("variant") or "").lower() != "circling"
+    ]
+    for m in straight_in + authorized_minima:
+        if m.get("da_ft_msl") is not None:
+            minima_ref = (
+                "DA",
+                float(m["da_ft_msl"]),
+                m.get("dh_ft_agl"),
+                "DH",
+            )
             break
-    if da is not None:
-        da_y = baseline_y - 12
-        out += _line(gp_start_x + 20, da_y, runway_x - 8, da_y,
-                     stroke=COLOR_ACCENT_CYAN, sw=0.75, dash="3 2")
-        out += _text(gp_start_x + 22, da_y - 3, f"DA {da}'",
-                     size=SIZE_MICRO, weight="bold",
-                     fill=COLOR_ACCENT_CYAN, tracking=TRACK)
+        if m.get("mda_ft_msl") is not None:
+            minima_ref = (
+                "MDA",
+                float(m["mda_ft_msl"]),
+                m.get("mdh_ft_agl"),
+                "MDH",
+            )
+            break
+    if minima_ref is not None and faf_alt is not None:
+        ref_kind, ref_msl, ref_agl, agl_kind = minima_ref
+        tdze = procedure.get("tdze_ft_msl") or procedure.get("airport_elev_ft_msl") or 0
+        try:
+            ref_height_agl = float(ref_agl) if ref_agl is not None else ref_msl - float(tdze)
+            faf_height_agl = float(faf_alt) - float(tdze)
+        except (TypeError, ValueError):
+            ref_height_agl = 0.0
+            faf_height_agl = 0.0
+        if ref_height_agl > 0 and faf_height_agl > 0:
+            t = max(0.0, min(1.0, ref_height_agl / faf_height_agl))
+            ref_x = runway_x - t * (runway_x - gp_start_x)
+            ref_y = baseline_y - t * (baseline_y - gp_start_y)
+            out += (
+                f'<g data-profile-minima="{_esc(ref_kind)}">\n'
+                f'<line x1="{_fmt(ref_x)}" y1="{_fmt(baseline_y)}" '
+                f'x2="{_fmt(ref_x)}" y2="{_fmt(ref_y)}" '
+                f'stroke="{COLOR_ACCENT_CYAN}" stroke-width="0.75" '
+                f'stroke-dasharray="3 2"/>\n'
+            )
+            label = f"{ref_kind} {int(round(ref_msl))}'"
+            if ref_agl is not None:
+                label += f" / {agl_kind} {int(round(float(ref_agl)))}'"
+            out += _text(ref_x + 3, ref_y - 3, label,
+                         size=SIZE_MICRO, weight="bold",
+                         fill=COLOR_ACCENT_CYAN, tracking=TRACK)
+            out += "</g>\n"
 
     # TDZE intentionally omitted — carried by the briefing grid above, and
     # repeating it here crowds the RW13 label at the profile's right edge.

@@ -60,6 +60,72 @@ def test_loads_batumi_geojson() -> None:
     assert load_basemap("definitely-not-a-real-region") is None
 
 
+def test_generated_coastline_overrides_hand_authored_water(tmp_path: Path) -> None:
+    base = {
+        "type": "FeatureCollection",
+        "region": "test",
+        "features": [
+            {
+                "type": "Feature",
+                "properties": {"class": "sea", "name": "OLD SEA"},
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]],
+                },
+            },
+            {
+                "type": "Feature",
+                "properties": {"class": "coast", "name": "OLD COAST"},
+                "geometry": {
+                    "type": "LineString",
+                    "coordinates": [[0, 0], [1, 1]],
+                },
+            },
+            {
+                "type": "Feature",
+                "properties": {"class": "city", "name": "KEEP"},
+                "geometry": {"type": "Point", "coordinates": [0.5, 0.5]},
+            },
+        ],
+    }
+    generated = {
+        "type": "FeatureCollection",
+        "bbox": [0, 0, 1, 1],
+        "features": [
+            {
+                "type": "Feature",
+                "properties": {"class": "sea", "name": "NEW SEA"},
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[[0, 0], [2, 0], [2, 2], [0, 0]]],
+                },
+            },
+            {
+                "type": "Feature",
+                "properties": {"class": "coast", "name": "NEW COAST"},
+                "geometry": {
+                    "type": "LineString",
+                    "coordinates": [[0, 0], [2, 2]],
+                },
+            },
+        ],
+    }
+    (tmp_path / "test.json").write_text(json.dumps(base), encoding="utf-8")
+    (tmp_path / "test-coastline.json").write_text(
+        json.dumps(generated), encoding="utf-8",
+    )
+
+    merged = load_basemap("test", data_root=tmp_path)
+    assert merged is not None
+    names = {
+        (f.get("properties") or {}).get("name")
+        for f in (merged.get("features") or [])
+    }
+    assert {"NEW SEA", "NEW COAST", "KEEP"} <= names
+    assert "OLD SEA" not in names
+    assert "OLD COAST" not in names
+
+
 def test_render_basemap_emits_svg() -> None:
     """render_basemap produces non-empty SVG with expected tags."""
     gj = load_basemap("batumi")

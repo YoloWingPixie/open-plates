@@ -105,6 +105,11 @@ tasks:
     cmds:
       - uv run python {{.SCRIPTS_DIR}}/build_basemap_hillshade.py {{.CLI_ARGS}}
 
+  basemap:coastline:
+    desc: "Build coastline/sea layer (usage: task basemap:coastline -- <region_id>)"
+    cmds:
+      - uv run python {{.SCRIPTS_DIR}}/build_basemap_coastline.py {{.CLI_ARGS}}
+
   basemap:waterways:
     desc: "Build waterways layer (usage: task basemap:waterways -- <region_id>)"
     cmds:
